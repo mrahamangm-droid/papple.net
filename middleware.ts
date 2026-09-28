@@ -8,24 +8,18 @@ import { getToken } from "next-auth/jwt";
 // in every individual page/route, and is kept deliberately minimal so it
 // doesn't add latency to every request.
 //
-// Build 4 note: every gated page/route ALSO checks the session itself
-// (getCurrentUser()/role in src/lib/session.ts) — this middleware is
-// defense in depth, not the only check, so a route is still safe even if a
-// matcher below is ever misconfigured.
+// Note: the auth-gated paths below (/account, /workspace, /assistant,
+// /enterprise, /admin) don't exist yet in this build — this middleware is
+// forward-compatible scaffolding for when they're built, and is a no-op
+// until then since nothing currently routes to those paths.
 const ADMIN_PATHS = ["/admin"];
 const AUTH_REQUIRED_PATHS = ["/account", "/workspace", "/assistant", "/enterprise"];
-// This page handles both signed-in and signed-out visitors itself (it shows
-// sign-in/sign-up links to someone who isn't authenticated yet, matched by
-// the invite's own email) — gating it here would bounce a signed-out
-// invitee before they ever see what the link is for.
 const AUTH_EXEMPT_PATHS = ["/enterprise/accept-invite"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/api/")) {
-    // Defense in depth: reject obviously oversized bodies early for API
-    // routes before they reach route handlers (routes still validate with zod).
     const contentLength = request.headers.get("content-length");
     if (contentLength && Number(contentLength) > 100_000) {
       return NextResponse.json({ error: "Request too large." }, { status: 413 });
