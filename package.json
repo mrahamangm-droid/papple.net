@@ -8,35 +8,24 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "14.2.18",
+    "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "zod": "3.23.8",
-    "@prisma/client": "5.20.0",
-    "next-auth": "4.24.8",
-    "bcryptjs": "2.4.3",
-    "stripe": "16.12.0"
+    "next-auth": "4.24.15"
   },
   "devDependencies": {
     "@types/node": "20.16.11",
     "@types/react": "18.3.11",
     "@types/react-dom": "18.3.1",
-    "@types/bcryptjs": "2.4.6",
     "autoprefixer": "10.4.20",
     "eslint": "8.57.1",
-    "eslint-config-next": "14.2.18",
-    "postcss": "8.4.47",
-    "prisma": "5.20.0",
+    "eslint-config-next": "14.2.35",
+    "postcss": "8.5.6",
     "tailwindcss": "3.4.13",
     "typescript": "5.6.3"
-  },
-  "prisma": {
-    "schema": "prisma/schema.prisma"
   },
   "engines": {
     "node": ">=18.18.0"
