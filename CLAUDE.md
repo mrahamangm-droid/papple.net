@@ -34,14 +34,14 @@ CI (`.github/workflows/ci.yml`) runs `npm install`, lint and typecheck on Node 2
   - #10 ESLint 10: lint crashes (`scopeManager.addGlobals is not a function`) because `eslint-config-next` 16.3.6 isn't ESLint 10-ready. Hold.
   - #12 TypeScript 7: `baseUrl` was removed (TS5102) and typescript-eslint doesn't support TS 7. Hold.
   - #13 Tailwind 4: the build fails because it needs `@tailwindcss/postcss` and a CSS-config migration. Hold.
-- Repo hygiene: Dependabot (npm only), SECURITY.md and a CodeQL workflow are in place.
+- Repo hygiene: Dependabot (npm + github-actions, weekly), SECURITY.md and a CodeQL workflow are in place.
 
 ## Next steps
 
 1. Merge #9 and #11 together (React 19), then smoke-test the deployed homepage.
 2. Decide whether to restore the Build 1–4.1 features README.md describes, or trim README.md to match the code.
 3. Rename `middleware.ts` to `proxy.ts` for Next 16.
-4. Consider adding a `github-actions` entry to `.github/dependabot.yml` and switching CI to `npm ci` now that the lockfile is committed and in sync.
+4. Consider switching CI to `npm ci` now that the lockfile is committed and in sync.
 5. Revisit ESLint 10, TS 7 and Tailwind 4 once upstream tooling supports them, as dedicated migration PRs.
 
 ## Scope
