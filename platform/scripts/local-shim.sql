@@ -12,6 +12,9 @@ create or replace function auth.role() returns text language sql stable as
 $$ select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'anon') $$;
 grant usage on schema auth to anon, authenticated, service_role;
 grant usage on schema public to anon, authenticated, service_role;
+-- Supabase gives service_role full privileges on the public schema by default; mirror that locally.
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant all on sequences to service_role;
 create schema if not exists extensions;
 grant usage on schema extensions to public;
 create extension if not exists pgtap schema extensions;
