@@ -1,0 +1,4 @@
+# ADR 0002 — Stripe Connect Express with destination charges
+**Status:** accepted by owner; **provider availability for Papple World FZE LLC and target countries is UNVERIFIED** and must be confirmed before sub-project 3.
+**Decision:** Professionals onboard as Connect Express accounts; Clients pay per milestone via destination charges; Papple's commission is an application fee (rates read from `platform_settings`: 500 bps Professional, 200 bps Client at launch). Stripe holds funds and does KYC, payouts, refunds. Papple stores only Stripe IDs and statuses.
+**Consequences:** Papple is never custodian of customer funds; no true escrow beyond Stripe's payout timing; the 2% client fee presentation/tax treatment needs accountant and legal review. Fallback: another marketplace-capable provider behind the same payments interface.
