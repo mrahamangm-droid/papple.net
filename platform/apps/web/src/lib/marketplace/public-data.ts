@@ -1,7 +1,7 @@
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const isValidSlug = (s: string): boolean => s.length >= 1 && s.length <= 70 && SLUG_RE.test(s);
 
-type Fetch = (view: "public_provider_cards" | "public_service_cards", slug: string) => Promise<{ data: unknown; error: { message: string } | null }>;
+type Fetch = (view: "public_provider_cards" | "public_service_cards" | "public_provider_ratings", slug: string) => Promise<{ data: unknown; error: { message: string } | null }>;
 
 /** Single-card lookups on the whitelisted public views. A malformed slug never reaches the database. */
 export function createPublicData(deps: { fetchOne: Fetch }) {
@@ -14,5 +14,16 @@ export function createPublicData(deps: { fetchOne: Fetch }) {
   return {
     provider: <T = Record<string, unknown>>(slug: string) => one<T>("public_provider_cards", slug),
     service: <T = Record<string, unknown>>(slug: string) => one<T>("public_service_cards", slug),
+    /** Aggregate of published reviews only. A failure here must never break a profile page, so it degrades to "no rating". */
+    rating: async (slug: string): Promise<{ avg: number | null; count: number }> => {
+      try {
+        const row = await one<{ rating_avg: number | string | null; rating_count: number | null }>("public_provider_ratings", slug);
+        const count = Number(row?.rating_count ?? 0);
+        if (!row || !count || row.rating_avg == null) return { avg: null, count: 0 };
+        return { avg: Number(row.rating_avg), count };
+      } catch {
+        return { avg: null, count: 0 };
+      }
+    },
   };
 }

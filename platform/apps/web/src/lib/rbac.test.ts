@@ -86,4 +86,9 @@ describe("navFor marketplace links", () => {
     expect(hrefs(ctx({ memberships: [], persona: "professional" }))).not.toContain("/services");
     expect(hrefs(ctx())).toEqual(expect.arrayContaining(["/profile", "/services"]));
   });
+  it("shows contracts and payouts only to users who belong to an organization", () => {
+    expect(hrefs(ctx({ memberships: [] }))).not.toContain("/contracts");
+    expect(hrefs(ctx({ memberships: [] }))).not.toContain("/settings/payouts");
+    expect(hrefs(ctx())).toEqual(expect.arrayContaining(["/contracts", "/settings/payouts"]));
+  });
 });

@@ -10,6 +10,11 @@ insert into public.platform_settings (key, value, description) values
  ('commission.professional_bps', '500', 'Launch commission charged to the Professional, in basis points'),
  ('commission.client_bps', '200', 'Launch fee charged to the Client, in basis points'),
  ('payments.enabled', 'false', 'Master switch for taking payments'),
+ ('payments.min_application_fee_minor', '100', 'PLACEHOLDER: minimum Papple fee per milestone payment in minor units (100 = AED 1.00, Stripe''s fixed fee); owner to confirm'),
+ ('contracts.min_milestone_minor', '10000', 'PLACEHOLDER: smallest milestone in minor units (10000 = AED 100), below which Stripe fees can exceed the commission; owner to confirm'),
+ ('payments.checkout_expiry_minutes', '60', 'PLACEHOLDER: how long a milestone Checkout session stays open'),
+ ('reviews.reveal_after_days', '14', 'PLACEHOLDER: a one-sided review becomes visible after this many days'),
+ ('contracts.max_milestones', '20', 'PLACEHOLDER: maximum milestones per contract'),
  ('limits.max_orgs_per_user', '5', 'Maximum organizations one user may create'),
  ('ai.monthly_message_limits', '{"free":20,"professional_plus":200,"business":1000,"enterprise":null}', 'Per-plan monthly AI message caps (null = by contract)')
 on conflict (key) do nothing;

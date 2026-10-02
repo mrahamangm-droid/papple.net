@@ -13,6 +13,10 @@ export const RULES = {
   message: { limit: 30, windowSec: 60 },
   report: { limit: 5, windowSec: 60 },
   conversation: { limit: 10, windowSec: 60 },
+  contract: { limit: 30, windowSec: 60 },
+  checkout: { limit: 10, windowSec: 60 },
+  dispute: { limit: 5, windowSec: 60 },
+  review: { limit: 5, windowSec: 60 },
 } as const satisfies Record<string, Rule>;
 
 export class RateLimitError extends Error {

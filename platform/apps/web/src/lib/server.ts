@@ -9,12 +9,20 @@ import { createOnboarding, type OnboardingInput } from "./onboarding";
 import { createSettings } from "./settings";
 import { z } from "zod";
 import { createMarketplaceDb, type Rpc } from "./marketplace/db";
+import { createContractsDb } from "./contracts/db";
 import { createSearch } from "./marketplace/search";
 import { createPublicData } from "./marketplace/public-data";
 import { createGuardedSearch } from "./marketplace/guarded-search";
 import { PermanentEmailError, createEmailNotifier } from "./marketplace/notify-email";
 import { createServerSupabase, getSessionUser } from "./supabase/server";
 import { createServiceClient } from "./supabase/service";
+import Stripe from "stripe";
+import * as Sentry from "@sentry/nextjs";
+import { createStripeProvider, type StripeLike } from "./payments/stripe-provider";
+import { createPaymentsServiceDb } from "./payments/service-db";
+import { createWebhookHandler } from "./payments/webhook-handler";
+import { createDbWebhookStore } from "./webhooks";
+import type { PaymentProvider } from "./payments/provider";
 
 /** Production wiring of the dependency-injected services. Server-only. */
 const salt = () => createHash("sha256").update(`audit-ip:${parseServerEnv(process.env).SUPABASE_SERVICE_ROLE_KEY}`).digest("hex");
@@ -108,6 +116,7 @@ const userRpc: Rpc = async (fn, args) => {
 };
 
 export const marketplaceDb = createMarketplaceDb(userRpc);
+export const contractsDb = createContractsDb(userRpc);
 
 export const searchService = createSearch({
   rpc: userRpc,
@@ -183,3 +192,41 @@ export async function runEmailNotifier(): Promise<{ sent: number }> {
 
 /** Throttled anonymous search for server-rendered pages (same limiter as /api/search). */
 export const guardedSearch = createGuardedSearch({ search: searchService, throttle, ip: clientIp });
+
+/** Service-role payment RPCs (webhook, checkout destination). Never hand this to user-facing code paths unchecked. */
+export const paymentsServiceDb = () =>
+  createPaymentsServiceDb(async (fn, args) => {
+    const { data, error } = await createServiceClient().rpc(fn, args);
+    return { data, error: error ? { code: error.code, message: error.message } : null };
+  });
+
+let stripeProvider: PaymentProvider | undefined;
+/** Lazy: importing this module never needs Stripe keys. Throws if payments are not configured. */
+export function paymentProvider(): PaymentProvider {
+  const key = process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!key || !webhookSecret) throw new Error("payments not configured");
+  // Stripe signs platform events and Connect events (account.updated) with different endpoint secrets.
+  const secrets = [webhookSecret, process.env.STRIPE_CONNECT_WEBHOOK_SECRET].filter((x): x is string => !!x);
+  stripeProvider ??= createStripeProvider(new Stripe(key) as unknown as StripeLike, secrets);
+  return stripeProvider;
+}
+
+/** Verified Stripe webhook entry point. Answers 503 (Stripe retries) until the keys exist. */
+export async function handleStripeWebhook(rawBody: string, signature: string | null): Promise<{ status: number }> {
+  let provider: PaymentProvider;
+  try {
+    provider = paymentProvider();
+  } catch {
+    return { status: 503 };
+  }
+  return createWebhookHandler({
+    provider,
+    store: createDbWebhookStore(createServiceClient()),
+    db: paymentsServiceDb(),
+    alert: (message, context) => {
+      console.error(message, context);
+      Sentry.captureMessage(message, { level: "error", extra: context });
+    },
+  })(rawBody, signature);
+}

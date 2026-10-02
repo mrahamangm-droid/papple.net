@@ -7,9 +7,13 @@ export PGHOST=/tmp PGPORT=54329 PGUSER=postgres
 psql -qAt -c "drop database if exists papple_race" -c "create database papple_race template papple_test" >/dev/null || { echo "run scripts/db-test.sh first"; exit 2; }
 export PGDATABASE=papple_race
 fail=0
+: > /tmp/race-errors.log
 q() { psql -qAt -c "$1"; }
 as() { # as <user-uuid> <sql>  (separate session, authenticated role, committed)
   psql -q -c "set role authenticated" -c "select set_config('request.jwt.claim.sub','$1',false)" -c "select pg_advisory_lock_shared(999)" -c "$2" >/dev/null 2>>/tmp/race-errors.log
+}
+svc() { # svc <sql>  (separate session, service_role, committed) for webhook-style calls
+  psql -q -c "set role service_role" -c "select pg_advisory_lock_shared(999)" -c "$1" >/dev/null 2>>/tmp/race-errors.log
 }
 # Barrier: a holder keeps advisory lock 999 so every worker blocks at the same point, then they all start together.
 hold() { psql -qAt -c "select pg_advisory_lock(999)" -c "select pg_sleep(1.5)" >/dev/null 2>&1 & sleep 0.4; }
@@ -49,6 +53,34 @@ check "one conversation per (kind, ref, org pair) under parallel starts" "$(q "s
 q "update platform_settings set value='1' where key='limits.new_conversations_per_day'; delete from conversations where created_by='$U_PRO';"
 hold; for p in 1 2 3 4 5 6 7 8; do as $U_PRO "select start_conversation('$O_PRO','project','eeeeee99-0000-0000-0000-0000000000$(printf %02d $p)','hi $p')" & done; wait
 check "daily conversation cap holds under parallel starts" "$(q "select count(*) from conversations where created_by='$U_PRO'")" 1
+
+# 6. one hire per project even when different proposals are hired at once
+q "insert into organizations (id,type,name) select ('cccccc99-0000-0000-0000-0000000001' || lpad(g::text,2,'0'))::uuid,'agency','Hire Pro '||g from generate_series(1,4) g;
+   insert into projects (id,org_id,title,description,currency,status) values ('eeeeee99-0000-0000-0000-0000000000f1','$O_CLIENT','Hire race','Detailed description','USD','open');
+   insert into proposals (id,project_id,org_id,cover_letter,price,currency,delivery_days,status)
+     select ('ffffff99-0000-0000-0000-0000000000' || lpad(g::text,2,'0'))::uuid,'eeeeee99-0000-0000-0000-0000000000f1',('cccccc99-0000-0000-0000-0000000001' || lpad(g::text,2,'0'))::uuid,'Offer',1000,'USD',7,'shortlisted' from generate_series(1,4) g;"
+hold; for n in 1 2 3 4 5 6 7 8; do as $U_CLIENT "select create_contract('$O_CLIENT','ffffff99-0000-0000-0000-0000000000$(printf %02d $(( (n % 4) + 1 )))')" & done; wait
+check "exactly one contract per project under parallel hires" "$(q "select count(*) from contracts where project_id='eeeeee99-0000-0000-0000-0000000000f1' and status <> 'cancelled'")" 1
+check "exactly one proposal ends up hired" "$(q "select count(*) from proposals where project_id='eeeeee99-0000-0000-0000-0000000000f1' and status='hired'")" 1
+
+# 7. approving one milestone from many tabs creates one payment
+q "insert into projects (id,org_id,title,description,currency,status) values ('eeeeee99-0000-0000-0000-0000000000f2','$O_CLIENT','Pay race','Detailed description','USD','closed');
+   insert into proposals (id,project_id,org_id,cover_letter,price,currency,delivery_days,status) values ('ffffff99-0000-0000-0000-0000000000f2','eeeeee99-0000-0000-0000-0000000000f2','$O_PRO','Offer',40000,'USD',7,'hired');
+   insert into connected_accounts (org_id,stripe_account_id,payouts_enabled) values ('$O_PRO','acct_race',true);
+   insert into contracts (id,project_id,proposal_id,client_org_id,provider_org_id,title,price,currency,commission_pro_bps,commission_client_bps,status,accepted_by_client,accepted_by_provider)
+     values ('dddddd99-0000-0000-0000-0000000000c2','eeeeee99-0000-0000-0000-0000000000f2','ffffff99-0000-0000-0000-0000000000f2','$O_CLIENT','$O_PRO','Pay race',40000,'USD',500,200,'active',true,true);
+   insert into milestones (id,contract_id,position,title,amount,status) values ('99999999-0000-0000-0000-0000000000a1','dddddd99-0000-0000-0000-0000000000c2',1,'Only',40000,'submitted');"
+hold; for n in 1 2 3 4 5 6 7 8; do as $U_CLIENT "select approve_milestone('$O_CLIENT','99999999-0000-0000-0000-0000000000a1')" & done; wait
+check "one payment row per milestone under parallel approvals" "$(q "select count(*) from payments where milestone_id='99999999-0000-0000-0000-0000000000a1'")" 1
+check "no approval call failed" "$(grep -c approve_milestone /tmp/race-errors.log 2>/dev/null || true)" 0
+
+# 8. a payment reported by many webhook deliveries is recorded once; the rest are flagged, never double-applied
+PAY=$(q "select id from payments where milestone_id='99999999-0000-0000-0000-0000000000a1'")
+hold; for n in 1 2 3 4 5 6 7 8; do svc "select record_payment_succeeded('$PAY','cs_$n','pi_$n',40800,'USD')" & done; wait
+check "payment succeeded exactly once" "$(q "select count(*) from payments where id='$PAY' and status='succeeded'")" 1
+check "the other seven deliveries are flagged as duplicate charges" "$(q "select count(*) from audit_log where action='payment.duplicate_charge'")" 7
+check "the provider is notified once" "$(q "select count(*) from notifications where type='payment_received'")" 1
+check "the contract completes once" "$(q "select count(*) from notifications where type='contract_completed' and user_id='$U_PRO'")" 1
 
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }

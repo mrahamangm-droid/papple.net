@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/shell/AppShell";
 import { MarkReadButton } from "@/components/marketplace/MarkReadButton";
 import { requireCapability } from "@/lib/auth-context";
+import { notificationCopy } from "@/lib/contracts/present";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = { title: "Notifications" };
@@ -23,11 +24,12 @@ export default async function Notifications() {
       <h1 className="text-2xl font-semibold">Notifications</h1>
       <ul className="mt-6 space-y-3">
         {(data ?? []).map((n) => {
-          const payload = (n.payload ?? {}) as { project_id?: string; conversation_id?: string };
-          const href = payload.conversation_id ? `/messages/${payload.conversation_id}` : payload.project_id ? `/projects/${payload.project_id}` : null;
+          const payload = (n.payload ?? {}) as { project_id?: string; conversation_id?: string; contract_id?: string };
+          const contract = notificationCopy(n.type as string, payload);
+          const href = contract ? contract.href : payload.conversation_id ? `/messages/${payload.conversation_id}` : payload.project_id ? `/projects/${payload.project_id}` : null;
           return (
             <li key={n.id} className={`text-sm ${n.read_at ? "opacity-60" : ""}`}>
-              {TEXT[n.type as string] ?? "You have a new notification."} {href && <Link className="underline" href={href}>Open</Link>} {!n.read_at && <MarkReadButton id={n.id as string} />}
+              {contract?.text ?? TEXT[n.type as string] ?? "You have a new notification."} {href && <Link className="underline" href={href}>Open</Link>} {!n.read_at && <MarkReadButton id={n.id as string} />}
             </li>
           );
         })}

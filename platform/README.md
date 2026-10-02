@@ -7,3 +7,6 @@ Papple World FZE LLC. A technology marketplace and SaaS platform; not an employe
 
 ## Marketplace core (Sub-project 2)
 Profiles, services, search, projects, proposals, messaging, notifications, reports and moderation. Spec: `docs/superpowers/specs/2026-10-02-papple-marketplace-core-design.md`. What is and is not verified: `docs/acceptance-subproject-2.md`.
+
+## Contracts, payments, reviews and disputes (Sub-project 3)
+Hire from a shortlisted proposal, agree milestones, pay per milestone through Stripe Connect (Papple holds no funds), blind two-way reviews and a dispute freeze. Spec: `docs/superpowers/specs/2026-10-02-papple-contracts-payments-design.md`. What is and is not verified: `docs/acceptance-subproject-3.md`. Needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `STRIPE_CONNECT_WEBHOOK_SECRET`; without them checkout is unavailable and the webhook answers 503.
