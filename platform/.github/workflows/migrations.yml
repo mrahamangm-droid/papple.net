@@ -1,0 +1,36 @@
+name: migrations
+on:
+  pull_request:
+    paths: ["supabase/**", ".github/workflows/migrations.yml"]
+  push:
+    branches: [main]
+    paths: ["supabase/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: migrations-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  check-staging: # dry run on every PR; blocks destructive SQL (DROP/TRUNCATE) unless marked -- allow-destructive
+    if: github.event_name == 'pull_request'
+    uses: mrahamangm-droid/saas-platform-kit/.github/workflows/reusable-supabase-migrations.yml@v1
+    with:
+      environment: staging
+      mode: check
+    secrets: inherit
+  staging:
+    if: github.event_name != 'pull_request'
+    uses: mrahamangm-droid/saas-platform-kit/.github/workflows/reusable-supabase-migrations.yml@v1
+    with:
+      environment: staging
+      mode: apply
+    secrets: inherit
+  production: # the GitHub Environment "production" requires a reviewer's approval before this job runs
+    if: github.event_name != 'pull_request'
+    needs: staging
+    uses: mrahamangm-droid/saas-platform-kit/.github/workflows/reusable-supabase-migrations.yml@v1
+    with:
+      environment: production
+      mode: apply
+    secrets: inherit

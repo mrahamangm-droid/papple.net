@@ -1,0 +1,4 @@
+# ADR 0001 — Shared-schema multi-tenancy enforced by Postgres RLS
+**Status:** accepted · **Context:** one platform for clients, professionals, agencies and enterprises; low cost at launch; isolation must not depend on every query remembering a `WHERE org_id`.
+**Decision:** shared database and schema; `org_id` on every business row; RLS default-deny with `SECURITY DEFINER` helpers reading `memberships` live; CI fails if any public table lacks RLS or a policy; platform admin uses a separate, audited server-only path.
+**Consequences:** + isolation holds even if app code is buggy; + cheap. − RLS must be tested on every table (pgTAP); − noisy-neighbour risk (mitigate with indexes/limits); enterprise tenants needing physical isolation would require a later migration to schema- or database-per-tenant.

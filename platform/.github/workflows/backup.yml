@@ -1,0 +1,15 @@
+name: backup
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup:
+    uses: mrahamangm-droid/saas-platform-kit/.github/workflows/reusable-db-backup-r2.yml@v1
+    with:
+      environment: production
+      prefix: papple
+      pg-major: "17"
+    secrets: inherit
