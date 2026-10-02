@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { reviewVerificationAction, revokeVerificationAction, setFlagAction, setOrgStatusAction, setPlatformRoleAction, setSettingAction, updatePlanAction } from "@/app/(app)/admin/actions";
+import { dismissReportAction, reviewVerificationAction, revokeVerificationAction, saveCategoryAction, saveSkillAction, setVisibilityAction, setFlagAction, setOrgStatusAction, setPlatformRoleAction, setSettingAction, updatePlanAction } from "@/app/(app)/admin/actions";
 import { requestVerificationAction } from "@/app/(app)/settings/verification/actions";
 import { FormError, fieldClass } from "@/components/marketplace/useAction";
 import type { ConsoleResult } from "@/lib/admin/actions";
@@ -198,6 +198,67 @@ export function RequestVerificationForm({ orgId }: { orgId: string }) {
       </label>
       <button disabled={pending || note.trim().length < 10} className={btn}>Request verification</button>
       <FormError error={error} />{done && <p role="status" className="text-sm">Request sent. We will notify you when it is reviewed.</p>}
+    </form>
+  );
+}
+
+export function VisibilityForm({ kind, id, hidden }: { kind: "profile" | "service" | "project"; id: string; hidden: boolean }) {
+  const [reason, setReason] = useState("");
+  const { pending, error, done, run } = useConsole();
+  return (
+    <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (window.confirm(hidden ? "Hide this from the marketplace?" : "Restore this? Services and projects come back as drafts for their owner to republish.")) run(() => setVisibilityAction({ kind, id, hidden, reason })); }}>
+      <Reason value={reason} onChange={setReason} />
+      <button disabled={pending || reason.trim().length < 10} className={btn}>{hidden ? "Hide" : "Restore"}</button>
+      <FormError error={error} /><Saved done={done} />
+    </form>
+  );
+}
+
+export function DismissForm({ reportId }: { reportId: string }) {
+  const [reason, setReason] = useState("");
+  const { pending, error, done, run } = useConsole();
+  return (
+    <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); run(() => dismissReportAction({ reportId, reason })); }}>
+      <Reason value={reason} onChange={setReason} />
+      <button disabled={pending || reason.trim().length < 10} className={btn}>Dismiss report</button>
+      <FormError error={error} /><Saved done={done} />
+    </form>
+  );
+}
+
+export function TaxonomyForm({ kind, item, parents }: { kind: "category" | "skill"; item?: { id: string; slug: string; name: string; parentId: string | null; position: number; active: boolean }; parents: { id: string; name: string }[] }) {
+  const [slug, setSlug] = useState(item?.slug ?? "");
+  const [name, setName] = useState(item?.name ?? "");
+  const [parentId, setParentId] = useState(item?.parentId ?? "");
+  const [position, setPosition] = useState(String(item?.position ?? 0));
+  const [active, setActive] = useState(item?.active ?? true);
+  const [reason, setReason] = useState("");
+  const { pending, error, done, run } = useConsole();
+  const id = item?.id ?? null;
+  return (
+    <form
+      className="space-y-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const parent = parentId === "" ? null : parentId;
+        run(() => kind === "category"
+          ? saveCategoryAction({ id, slug: id ? undefined : slug, name, parentId: parent, position: Number(position), active, reason })
+          : saveSkillAction({ id, slug: id ? undefined : slug, name, categoryId: parent, active, reason }));
+      }}
+    >
+      {!id && <label className="block text-sm">Slug (lowercase letters, digits and dashes; cannot change later)<input className={fieldClass} value={slug} onChange={(e) => setSlug(e.target.value)} required pattern="[a-z0-9-]{2,60}" /></label>}
+      <label className="block text-sm">Name<input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={80} /></label>
+      <label className="block text-sm">{kind === "category" ? "Parent category (optional)" : "Category (optional)"}
+        <select className={fieldClass} value={parentId} onChange={(e) => setParentId(e.target.value)}>
+          <option value="">None</option>
+          {parents.filter((p) => p.id !== id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </label>
+      {kind === "category" && <label className="block text-sm">Position<input className={fieldClass} inputMode="numeric" value={position} onChange={(e) => setPosition(e.target.value)} /></label>}
+      <label className="block text-sm"><input type="checkbox" className="mr-2" checked={active} onChange={(e) => setActive(e.target.checked)} />Active (available for new use)</label>
+      <Reason value={reason} onChange={setReason} />
+      <button disabled={pending || reason.trim().length < 10} className={btn}>{id ? "Save" : `Add ${kind}`}</button>
+      <FormError error={error} /><Saved done={done} />
     </form>
   );
 }
