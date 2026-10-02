@@ -32,3 +32,12 @@ Stripe Connect · Resend · Sentry · PostHog arrive in later sub-projects / opt
 - All writes go through `SECURITY DEFINER` RPCs that take an explicit `p_org` and re-check the caller's role. Error codes: 42501 not allowed, 22023 invalid, 54000 limit, 23505 duplicate.
 - Search: Postgres full-text (`websearch_to_tsquery`) plus `pg_trgm`, keyset-paginated. Matching is rule-based and returns reasons, never a numeric score; weights live in `platform_settings`.
 - Web layer: dependency-injected factories (`createSearchHandler`, `createActions`, `createCronHandler`, `createEmailNotifier`) wrapped by thin route/server-action files, so logic is unit-testable without a database.
+
+## Contracts and payments
+- Papple never holds customer funds: a client pays per milestone through Stripe Checkout as a destination charge (`transfer_data.destination` + `application_fee_amount`); the professional's Stripe Express account receives the rest. Commission (5% professional + 2% client at launch) is data in `platform_settings`, snapshotted on each contract at hire.
+- Only the verified Stripe webhook marks a payment `succeeded` (service-role-only RPC `record_payment_succeeded`, keyed by payment id, amount and currency checked). Clients can only ask for approval; they cannot read or write payment state, the Checkout session id or the Stripe account id (column grants).
+- Lock order everywhere: milestone, then contract, then payment. One payment per milestone (unique), one live contract per project (partial unique index).
+- Retry safety: `approve_milestone` reports the previous Checkout session; the server expires it, and refuses to open another if it was already paid (`expireCheckout` returns `complete`). `attach_checkout_session` is a compare-and-set against that session, so only one live session exists. A failure event only affects the payment's current session.
+- Provider boundary: `PaymentProvider` (Stripe adapter plus a fake in tests). Platform and Connect events use separate Stripe signing secrets (`STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET`).
+- Disputes freeze a contract; resolution needs platform staff plus aal2 and is audited. Reviews are blind and close once the other side's review is visible; the public aggregate is `public_provider_ratings`.
+- Fee math lives in SQL (`approve_milestone`, the authority) and TypeScript (`computeMilestoneCharge`), both half-up integer arithmetic on minor units.
