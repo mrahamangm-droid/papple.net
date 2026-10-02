@@ -11,6 +11,7 @@ function setup(event: ProviderEvent | Error, dbResult: string = "recorded") {
     recordPaymentSucceeded: vi.fn(async () => dbResult),
     recordPaymentFailed: vi.fn(async () => "failed"),
     recordAccountUpdate: vi.fn(async () => true),
+    recordRefundSucceeded: vi.fn(async () => dbResult),
   };
   const alert = vi.fn();
   const handler = createWebhookHandler({ provider, store: createMemoryWebhookStore(), db, alert });
@@ -75,5 +76,35 @@ describe("webhook handler", () => {
     const { handler, alert } = setup(PAID, "duplicate");
     await handler("{}", "sig");
     expect(alert).not.toHaveBeenCalled();
+  });
+  describe("refunds", () => {
+    const REFUND: ProviderEvent = { kind: "refund_succeeded", id: "evt_r", paymentId: "p1", refundId: "re_1", amount: 20400, currency: "USD" };
+    it("finalizes a refund once and ignores a replay", async () => {
+      const { handler, db } = setup(REFUND, "recorded");
+      expect((await handler("{}", "sig")).status).toBe(200);
+      expect((await handler("{}", "sig")).status).toBe(200);
+      expect(db.recordRefundSucceeded).toHaveBeenCalledTimes(1);
+      expect(db.recordRefundSucceeded).toHaveBeenCalledWith({ paymentId: "p1", refundId: "re_1", amount: 20400, currency: "USD" });
+    });
+    it("raises an alert for a refund that does not match the payment, and still acknowledges it", async () => {
+      const { handler, alert } = setup(REFUND, "mismatch");
+      expect((await handler("{}", "sig")).status).toBe(200);
+      expect(alert).toHaveBeenCalledWith("payment webhook outcome: mismatch", { eventId: "evt_r", paymentId: "p1" });
+    });
+    it("alerts on a refund nobody queued", async () => {
+      const { handler, alert } = setup(REFUND, "unknown");
+      await handler("{}", "sig");
+      expect(alert).toHaveBeenCalledTimes(1);
+    });
+    it("returns 500 so Stripe retries when the database fails", async () => {
+      const { handler, db } = setup(REFUND);
+      db.recordRefundSucceeded.mockRejectedValueOnce(new Error("db"));
+      expect((await handler("{}", "sig")).status).toBe(500);
+    });
+  });
+  it("alerts when money arrives on a cancelled contract, and still acknowledges the event", async () => {
+    const { handler, alert } = setup(PAID, "paid_on_cancelled");
+    expect((await handler("{}", "sig")).status).toBe(200);
+    expect(alert).toHaveBeenCalledWith("payment webhook outcome: paid_on_cancelled", { eventId: "evt_1", paymentId: "p1" });
   });
 });

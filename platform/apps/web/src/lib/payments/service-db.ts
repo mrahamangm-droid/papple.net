@@ -17,6 +17,13 @@ export function createPaymentsServiceDb(rpc: ServiceRpc) {
     recordPaymentFailed: (paymentId: string, sessionId: string) => call<string>("record_payment_failed", { p_payment: paymentId, p_session: sessionId }),
     payoutAccount: (orgId: string) => call<string | null>("payout_account", { p_org: orgId }),
     registerConnectedAccount: (orgId: string, account: string) => call<void>("register_connected_account", { p_org: orgId, p_account: account }),
+    listPendingRefunds: async (disputeId: string) => {
+      const rows = await call<{ payment_id: string; payment_intent_id: string; amount: number; currency: string; idempotency_key: string }[]>("list_pending_refunds", { p_dispute: disputeId });
+      return rows.map((r) => ({ paymentId: r.payment_id, paymentIntentId: r.payment_intent_id, amount: r.amount, currency: r.currency, idempotencyKey: r.idempotency_key }));
+    },
+    recordRefundSucceeded: (i: { paymentId: string; refundId: string; amount: number; currency: string }) =>
+      call<string>("record_refund_succeeded", { p_payment: i.paymentId, p_refund: i.refundId, p_amount: i.amount, p_currency: i.currency }),
+    recordRefundFailed: (paymentId: string, reason: string) => call<void>("record_refund_failed", { p_payment: paymentId, p_reason: reason }),
     recordAccountUpdate: (account: string, payoutsEnabled: boolean, detailsSubmitted: boolean) =>
       call<boolean>("record_account_update", { p_account: account, p_payouts: payoutsEnabled, p_details: detailsSubmitted }),
   };
