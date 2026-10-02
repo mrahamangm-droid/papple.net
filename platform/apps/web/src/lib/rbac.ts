@@ -50,6 +50,7 @@ export function navFor(ctx: AuthContext): NavItem[] {
   ];
   // Provider tools follow membership (what the database will actually allow), never the persona label.
   if (ctx.memberships.length > 0) items.push({ href: "/profile", label: "My profile" }, { href: "/services", label: "My services" });
+  if (ctx.memberships.length > 0) items.push({ href: "/contracts", label: "Contracts" }, { href: "/settings/payouts", label: "Payouts" });
   if (ctx.platformRoles.includes("admin")) items.push({ href: "/admin", label: "Admin" });
   return items;
 }

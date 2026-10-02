@@ -90,5 +90,9 @@ describe("marketplace rules", () => {
     expect(RULES.message).toEqual({ limit: 30, windowSec: 60 });
     expect(RULES.report).toEqual({ limit: 5, windowSec: 60 });
     expect(RULES.conversation).toEqual({ limit: 10, windowSec: 60 });
+    expect(RULES.contract).toEqual({ limit: 30, windowSec: 60 });
+    expect(RULES.checkout).toEqual({ limit: 10, windowSec: 60 });
+    expect(RULES.dispute).toEqual({ limit: 5, windowSec: 60 });
+    expect(RULES.review).toEqual({ limit: 5, windowSec: 60 });
   });
 });
