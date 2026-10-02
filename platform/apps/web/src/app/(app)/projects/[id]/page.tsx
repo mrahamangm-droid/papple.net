@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { Card } from "@/components/ui/Card";
 import { ContactForm } from "@/components/marketplace/ContactForm";
+import { HireButton } from "@/components/contracts/ContractButtons";
 import { DecideButtons } from "@/components/marketplace/DecideButtons";
 import { ProjectStatusButtons } from "@/components/marketplace/ProjectStatusButtons";
 import { ProposalForm } from "@/components/marketplace/ProposalForm";
@@ -30,6 +31,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const clientRole = ctx.memberships.find((m) => m.orgId === p.org_id)?.role;
   const isClient = clientRole !== undefined;
   const canManage = clientRole === "owner" || clientRole === "admin" || clientRole === "member";
+  const canHire = clientRole === "owner" || clientRole === "admin";
 
   const { data: props } = await db.from("proposals").select("id, org_id, cover_letter, price, currency, delivery_days, status").eq("project_id", id).order("submitted_at", { ascending: false });
   const { data: names } = (props ?? []).length ? await db.from("proposal_providers").select("proposal_id, headline").eq("project_id", id) : { data: [] };
@@ -39,6 +41,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     currency: x.currency as string, deliveryDays: x.delivery_days as number, status: x.status as string,
   }));
 
+  const { data: contract } = await db.from("contracts").select("id").eq("project_id", id).maybeSingle(); // RLS: only the two parties see it
   const providerOrgs = isClient ? [] : await eligibleOrgs(ctx, ["owner", "admin", "member"]);
   const ownActive = !isClient ? (props ?? []).find((x) => x.status === "submitted" || x.status === "shortlisted") : undefined;
 
@@ -66,7 +69,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           <section className="mt-8" aria-label="Proposals">
             <h2 className="text-lg font-semibold">Proposals</h2>
             <div className="mt-3">
-              <ProposalList proposals={rows} renderActions={canManage ? (r) => (r.status === "submitted" || r.status === "shortlisted" ? <DecideButtons id={r.id} projectId={id} /> : null) : undefined} />
+              <ProposalList proposals={rows} renderActions={canManage ? (r) => (
+                r.status === "hired" && contract ? <Link className="underline text-sm" href={`/contracts/${contract.id}`}>Open contract</Link>
+                : r.status === "submitted" || r.status === "shortlisted" ? (
+                  <div className="space-y-2">
+                    <DecideButtons id={r.id} projectId={id} />
+                    {r.status === "shortlisted" && canHire && p.status === "open" && <HireButton orgId={p.org_id as string} proposalId={r.id} projectId={id} />}
+                  </div>
+                ) : null) : undefined} />
             </div>
           </section>
           {ranked.length > 0 && (
