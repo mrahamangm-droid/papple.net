@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { parsePublicEnv } from "@/lib/env";
 import { connectSources } from "@/lib/observability";
 import { buildSecurityHeaders } from "@/lib/security-headers";
+import { isProtectedPath } from "@/lib/route-gate";
 import { updateSession } from "@/lib/supabase/session";
 
 // Optimistic gate only. Every protected page/route re-checks on the server (defense in depth).
-const PROTECTED = ["/dashboard", "/admin", "/onboarding", "/settings"];
 
 function applyHeaders(res: NextResponse, headers: Record<string, string>) {
   for (const [k, v] of Object.entries(headers)) res.headers.set(k, v);
@@ -26,7 +26,7 @@ export async function proxy(request: NextRequest) {
 
   const { response, user } = await updateSession(request);
   const path = request.nextUrl.pathname;
-  if (!user && PROTECTED.some((p) => path === p || path.startsWith(`${p}/`))) {
+  if (!user && isProtectedPath(path)) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
     url.search = "";
