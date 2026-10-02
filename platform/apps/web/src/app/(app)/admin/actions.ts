@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { getAuthContext } from "@/lib/auth-context";
 import { createAdminConsoleActions } from "@/lib/admin/actions";
+import { categoryInput, dismissInput, hideInput, skillInput } from "@/lib/admin/moderation";
 import { flagInput, orgStatusInput, planInput, revokeVerificationInput, roleInput, settingInput, verificationReviewInput } from "@/lib/admin/validators";
 import { adminAction, adminConsoleDb } from "@/lib/server";
 
@@ -19,7 +20,15 @@ const setOrgStatus = adminAction({ name: "console.org.status", input: orgStatusI
 const setPlatformRole = adminAction({ name: "console.role.set", input: roleInput, handler: (i) => actions.setPlatformRole(i) });
 const reviewVerification = adminAction({ name: "console.verification.review", input: verificationReviewInput, handler: (i) => actions.reviewVerification(i) });
 const revokeVerification = adminAction({ name: "console.verification.revoke", input: revokeVerificationInput, handler: (i) => actions.revokeVerification(i) });
+const setVisibility = adminAction({ name: "console.visibility.set", input: hideInput, handler: (i) => actions.setVisibility(i) });
+const dismissReport = adminAction({ name: "console.report.dismiss", input: dismissInput, handler: (i) => actions.dismissReport(i) });
+const saveCategory = adminAction({ name: "console.category.save", input: categoryInput, handler: (i) => actions.saveCategory(i) });
+const saveSkill = adminAction({ name: "console.skill.save", input: skillInput, handler: (i) => actions.saveSkill(i) });
 
+export async function setVisibilityAction(input: unknown) { return setVisibility(input); }
+export async function dismissReportAction(input: unknown) { return dismissReport(input); }
+export async function saveCategoryAction(input: unknown) { return saveCategory(input); }
+export async function saveSkillAction(input: unknown) { return saveSkill(input); }
 export async function setSettingAction(input: unknown) { return setSetting(input); }
 export async function setFlagAction(input: unknown) { return setFlag(input); }
 export async function updatePlanAction(input: unknown) { return updatePlan(input); }
