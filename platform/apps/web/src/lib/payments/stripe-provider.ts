@@ -1,0 +1,95 @@
+import type { CheckoutInput, PaymentProvider, ProviderEvent } from "./provider";
+
+interface StripeEventLike { id: string; type: string; data?: { object?: Record<string, unknown> } }
+
+/** The slice of the Stripe SDK this app uses; lets tests inject a fake and keeps the SDK out of every other file. */
+export interface StripeLike {
+  checkout: { sessions: { create(p: Record<string, unknown>): Promise<{ id: string; url: string | null }>; expire(id: string): Promise<unknown>; retrieve(id: string): Promise<{ status?: string | null }> } };
+  accounts: { create(p: Record<string, unknown>): Promise<{ id: string }> };
+  accountLinks: { create(p: Record<string, unknown>): Promise<{ url: string }> };
+  webhooks: { constructEvent(body: string, signature: string, secret: string): StripeEventLike };
+}
+
+const MIN_EXPIRY_MINUTES = 31; // Stripe rejects sessions that expire in under 30 minutes
+
+/** `webhookSecret` may list several signing secrets: Stripe gives the platform endpoint and the Connect endpoint (account.updated) separate ones. */
+export function createStripeProvider(stripe: StripeLike, webhookSecret: string | string[], now: () => number = Date.now): PaymentProvider {
+  const secrets = Array.isArray(webhookSecret) ? webhookSecret : [webhookSecret];
+  function verify(rawBody: string, signature: string): StripeEventLike {
+    let last: unknown = new Error("no webhook secret configured");
+    for (const secret of secrets) {
+      try {
+        return stripe.webhooks.constructEvent(rawBody, signature, secret);
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last;
+  }
+
+  return {
+    async createCheckout(i: CheckoutInput) {
+      const minutes = Math.min(Math.max(i.expiresInMinutes, MIN_EXPIRY_MINUTES), 24 * 60);
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        client_reference_id: i.paymentId,
+        metadata: { payment_id: i.paymentId },
+        line_items: [{ quantity: 1, price_data: { currency: i.currency.toLowerCase(), unit_amount: i.totalMinor, product_data: { name: i.title.slice(0, 120) } } }],
+        payment_intent_data: {
+          application_fee_amount: i.applicationFeeMinor,
+          transfer_data: { destination: i.destinationAccount },
+          metadata: { payment_id: i.paymentId },
+        },
+        success_url: i.successUrl,
+        cancel_url: i.cancelUrl,
+        expires_at: Math.floor(now() / 1000) + minutes * 60,
+      });
+      if (!session.url) throw new Error("checkout session has no url");
+      return { sessionId: session.id, url: session.url };
+    },
+
+    async expireCheckout(sessionId) {
+      try {
+        await stripe.checkout.sessions.expire(sessionId);
+        return "expired";
+      } catch (e) {
+        // Stripe refuses to expire a session that is already paid. That must never be mistaken for "safe to open another".
+        const { status } = await stripe.checkout.sessions.retrieve(sessionId);
+        if (status === "complete") return "complete";
+        if (status === "expired") return "expired";
+        throw e;
+      }
+    },
+
+    async createOnboardingLink(i) {
+      const account = i.account ?? (await stripe.accounts.create({ type: "express" })).id;
+      const link = await stripe.accountLinks.create({ account, type: "account_onboarding", return_url: i.returnUrl, refresh_url: i.refreshUrl });
+      return { account, url: link.url };
+    },
+
+    parseWebhook(rawBody, signature): ProviderEvent {
+      const event = verify(rawBody, signature); // throws on a bad signature
+      const obj = (event.data?.object ?? {}) as Record<string, unknown> & { id: string; metadata?: Record<string, unknown> };
+      const paymentId: unknown = obj.metadata?.payment_id;
+      switch (event.type) {
+        case "checkout.session.completed":
+        case "checkout.session.async_payment_succeeded":
+          if (obj.payment_status === "paid" && typeof paymentId === "string" && typeof obj.payment_intent === "string") {
+            return {
+              kind: "payment_succeeded", id: event.id, paymentId, sessionId: obj.id, intentId: obj.payment_intent,
+              amountTotal: Number(obj.amount_total), currency: String(obj.currency).toUpperCase(),
+            };
+          }
+          return { kind: "ignored", id: event.id, type: event.type };
+        case "checkout.session.expired":
+        case "checkout.session.async_payment_failed":
+          if (typeof paymentId === "string") return { kind: "payment_failed", id: event.id, paymentId, sessionId: obj.id };
+          return { kind: "ignored", id: event.id, type: event.type };
+        case "account.updated":
+          return { kind: "account_updated", id: event.id, accountId: obj.id, payoutsEnabled: obj.payouts_enabled === true, detailsSubmitted: obj.details_submitted === true };
+        default:
+          return { kind: "ignored", id: event.id, type: event.type };
+      }
+    },
+  };
+}
