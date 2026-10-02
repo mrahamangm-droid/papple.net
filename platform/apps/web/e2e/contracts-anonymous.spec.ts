@@ -26,3 +26,11 @@ test("the webhook only accepts POST", async ({ request }) => {
   const res = await request.get("/api/webhooks/stripe", { maxRedirects: 0 });
   expect(res.status()).toBe(405);
 });
+
+for (const path of ["/admin/disputes", "/admin/disputes/11111111-1111-4111-8111-111111111111"]) {
+  test(`admin area ${path} redirects to /signin`, async ({ request }) => {
+    const res = await request.get(path, { maxRedirects: 0 });
+    expect(res.status()).toBe(307);
+    expect(res.headers().location).toContain(`/signin?next=${encodeURIComponent(path)}`);
+  });
+}
