@@ -17,3 +17,7 @@ grant usage on schema extensions to public;
 create extension if not exists pgtap schema extensions;
 create extension if not exists pgcrypto schema extensions;
 alter database papple_test set search_path = public, extensions;
+
+-- auth.jwt(): real Supabase provides it; the shim reads the same GUC PostgREST sets.
+create or replace function auth.jwt() returns jsonb language sql stable as
+$$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
