@@ -40,4 +40,19 @@ describe("createPaymentsServiceDb", () => {
     const rpc = vi.fn(async () => ({ data: null, error: { code: "XX000", message: "boom" } }));
     await expect(createPaymentsServiceDb(rpc).recordPaymentFailed("p", "cs")).rejects.toThrow("boom");
   });
+  it("lists pending refunds as camelCase rows", async () => {
+    const rpc = ok([{ payment_id: "p1", payment_intent_id: "pi_1", amount: 20400, currency: "USD", idempotency_key: "refund:p1" }]);
+    expect(await createPaymentsServiceDb(rpc).listPendingRefunds("d1")).toEqual([
+      { paymentId: "p1", paymentIntentId: "pi_1", amount: 20400, currency: "USD", idempotencyKey: "refund:p1" },
+    ]);
+    expect(rpc).toHaveBeenCalledWith("list_pending_refunds", { p_dispute: "d1" });
+  });
+  it("records refund outcomes", async () => {
+    const rpc = ok("recorded");
+    const db = createPaymentsServiceDb(rpc);
+    expect(await db.recordRefundSucceeded({ paymentId: "p1", refundId: "re_1", amount: 20400, currency: "USD" })).toBe("recorded");
+    await db.recordRefundFailed("p1", "network");
+    expect(rpc).toHaveBeenCalledWith("record_refund_succeeded", { p_payment: "p1", p_refund: "re_1", p_amount: 20400, p_currency: "USD" });
+    expect(rpc).toHaveBeenCalledWith("record_refund_failed", { p_payment: "p1", p_reason: "network" });
+  });
 });

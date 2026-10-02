@@ -5,6 +5,7 @@ interface StripeEventLike { id: string; type: string; data?: { object?: Record<s
 /** The slice of the Stripe SDK this app uses; lets tests inject a fake and keeps the SDK out of every other file. */
 export interface StripeLike {
   checkout: { sessions: { create(p: Record<string, unknown>): Promise<{ id: string; url: string | null }>; expire(id: string): Promise<unknown>; retrieve(id: string): Promise<{ status?: string | null }> } };
+  refunds: { create(p: Record<string, unknown>, opts: { idempotencyKey: string }): Promise<{ id: string }> };
   accounts: { create(p: Record<string, unknown>): Promise<{ id: string }> };
   accountLinks: { create(p: Record<string, unknown>): Promise<{ url: string }> };
   webhooks: { constructEvent(body: string, signature: string, secret: string): StripeEventLike };
@@ -61,6 +62,16 @@ export function createStripeProvider(stripe: StripeLike, webhookSecret: string |
       }
     },
 
+    async refundPayment(i) {
+      if (!Number.isInteger(i.amountMinor) || i.amountMinor <= 0) throw new Error("refund amount must be a positive integer");
+      if (!i.paymentIntentId) throw new Error("refund needs the payment intent of the charge");
+      const refund = await stripe.refunds.create(
+        { payment_intent: i.paymentIntentId, amount: i.amountMinor, refund_application_fee: true, reverse_transfer: true, metadata: { payment_id: i.paymentId } },
+        { idempotencyKey: i.idempotencyKey },
+      );
+      return { refundId: refund.id };
+    },
+
     async createOnboardingLink(i) {
       const account = i.account ?? (await stripe.accounts.create({ type: "express" })).id;
       const link = await stripe.accountLinks.create({ account, type: "account_onboarding", return_url: i.returnUrl, refresh_url: i.refreshUrl });
@@ -79,6 +90,13 @@ export function createStripeProvider(stripe: StripeLike, webhookSecret: string |
               kind: "payment_succeeded", id: event.id, paymentId, sessionId: obj.id, intentId: obj.payment_intent,
               amountTotal: Number(obj.amount_total), currency: String(obj.currency).toUpperCase(),
             };
+          }
+          return { kind: "ignored", id: event.id, type: event.type };
+        case "refund.created":
+        case "refund.updated":
+          // A refund is final only once Stripe says it succeeded; metadata.payment_id is what refundPayment attached.
+          if (obj.status === "succeeded" && typeof paymentId === "string") {
+            return { kind: "refund_succeeded", id: event.id, paymentId, refundId: obj.id, amount: Number(obj.amount), currency: String(obj.currency).toUpperCase() };
           }
           return { kind: "ignored", id: event.id, type: event.type };
         case "checkout.session.expired":

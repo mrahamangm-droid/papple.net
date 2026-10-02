@@ -150,3 +150,54 @@ describe("onboarding", () => {
     expect(accountsCreate).not.toHaveBeenCalled();
   });
 });
+
+describe("refundPayment", () => {
+  const input = { paymentId: PAY, paymentIntentId: "pi_1", amountMinor: 20400, currency: "USD", idempotencyKey: `refund:${PAY}` };
+  it("refunds the whole charge, returns the application fee and reverses the transfer", async () => {
+    const create = vi.fn(async (_p: Record<string, unknown>, _o: { idempotencyKey: string }) => ({ id: "re_1" }));
+    const provider = createStripeProvider({ refunds: { create } } as unknown as StripeLike, SECRET);
+    expect(await provider.refundPayment(input)).toEqual({ refundId: "re_1" });
+    expect(create).toHaveBeenCalledWith(
+      { payment_intent: "pi_1", amount: 20400, refund_application_fee: true, reverse_transfer: true, metadata: { payment_id: PAY } },
+      { idempotencyKey: `refund:${PAY}` },
+    );
+  });
+  it.each([0, -5, 12.5, Number.NaN])("refuses an invalid amount (%s) without calling Stripe", async (amountMinor) => {
+    const create = vi.fn();
+    const provider = createStripeProvider({ refunds: { create } } as unknown as StripeLike, SECRET);
+    await expect(provider.refundPayment({ ...input, amountMinor })).rejects.toThrow();
+    expect(create).not.toHaveBeenCalled();
+  });
+  it("refuses a missing payment intent", async () => {
+    const create = vi.fn();
+    const provider = createStripeProvider({ refunds: { create } } as unknown as StripeLike, SECRET);
+    await expect(provider.refundPayment({ ...input, paymentIntentId: "" })).rejects.toThrow();
+    expect(create).not.toHaveBeenCalled();
+  });
+  it("lets a Stripe failure propagate", async () => {
+    const provider = createStripeProvider({ refunds: { create: async () => { throw new Error("insufficient balance"); } } } as unknown as StripeLike, SECRET);
+    await expect(provider.refundPayment(input)).rejects.toThrow("insufficient balance");
+  });
+});
+
+describe("refund webhooks", () => {
+  const refundEvent = (type: string, over: Record<string, unknown> = {}) => ({
+    id: "evt_r", object: "event", type,
+    data: { object: { id: "re_1", object: "refund", status: "succeeded", amount: 20400, currency: "usd", metadata: { payment_id: PAY }, ...over } },
+  });
+  it.each(["refund.created", "refund.updated"])("normalizes a succeeded refund from %s", (type) => {
+    const { stripe, provider } = realProvider();
+    const { payload, header } = signed(stripe, refundEvent(type));
+    expect(provider.parseWebhook(payload, header)).toEqual({ kind: "refund_succeeded", id: "evt_r", paymentId: PAY, refundId: "re_1", amount: 20400, currency: "USD" });
+  });
+  it("ignores a refund that has not succeeded", () => {
+    const { stripe, provider } = realProvider();
+    const { payload, header } = signed(stripe, refundEvent("refund.updated", { status: "pending" }));
+    expect(provider.parseWebhook(payload, header).kind).toBe("ignored");
+  });
+  it("ignores a refund that carries no payment id", () => {
+    const { stripe, provider } = realProvider();
+    const { payload, header } = signed(stripe, refundEvent("refund.created", { metadata: {} }));
+    expect(provider.parseWebhook(payload, header).kind).toBe("ignored");
+  });
+});
