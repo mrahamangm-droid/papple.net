@@ -9,7 +9,7 @@ function setup(aal2 = true) {
   const db = {
     setSetting: vi.fn(async (_i: unknown) => undefined), setFlag: vi.fn(async (_i: unknown) => undefined), updatePlan: vi.fn(async (_i: unknown) => undefined),
     setOrgStatus: vi.fn(async (_i: unknown) => undefined), setPlatformRole: vi.fn(async (_i: unknown) => undefined),
-    requestVerification: vi.fn(async (_i: unknown) => undefined), reviewVerification: vi.fn(async (_i: unknown) => undefined), revokeVerification: vi.fn(async (_i: unknown) => undefined),
+    requestVerification: vi.fn(async (_i: unknown) => undefined), setVisibility: vi.fn(async (_i: unknown) => undefined), dismissReport: vi.fn(async (_i: unknown) => undefined), saveCategory: vi.fn(async (_i: unknown) => undefined), saveSkill: vi.fn(async (_i: unknown) => undefined), reviewVerification: vi.fn(async (_i: unknown) => undefined), revokeVerification: vi.fn(async (_i: unknown) => undefined),
   };
   const revalidate = vi.fn();
   return { db, revalidate, actions: createAdminConsoleActions({ db, revalidate, hasSecondFactor: async () => aal2 }) };
@@ -37,6 +37,10 @@ describe("admin console actions", () => {
       actions.setPlatformRole({ userId: id, role: "support", grant: true, reason }),
       actions.reviewVerification({ requestId: id, decision: "approved", note: reason }),
       actions.revokeVerification({ orgId: id, reason }),
+      actions.setVisibility({ kind: "profile", id, hidden: true, reason }),
+      actions.dismissReport({ reportId: id, reason }),
+      actions.saveCategory({ id: null, slug: "web-design", name: "Web design", parentId: null, position: 1, active: true, reason }),
+      actions.saveSkill({ id: null, slug: "figma", name: "Figma", categoryId: null, active: true, reason }),
     ]);
     for (const r of results) expect(r).toEqual({ ok: false, code: "forbidden" });
     for (const fn of Object.values(db)) expect(fn).not.toHaveBeenCalled();
@@ -71,5 +75,15 @@ describe("admin console actions", () => {
     const { actions, revalidate } = setup();
     expect(await actions.reviewVerification({ requestId: id, decision: "approved", note: reason })).toEqual({ ok: true });
     expect(revalidate).toHaveBeenCalledWith("/admin/verification");
+  });
+  it("moderation and taxonomy actions call the database and refresh their pages", async () => {
+    const { actions, db, revalidate } = setup();
+    expect(await actions.setVisibility({ kind: "project", id, hidden: true, reason })).toEqual({ ok: true });
+    expect(db.setVisibility).toHaveBeenCalledWith({ kind: "project", id, hidden: true, reason });
+    expect(revalidate).toHaveBeenCalledWith("/admin/reports");
+    expect(await actions.dismissReport({ reportId: id, reason })).toEqual({ ok: true });
+    expect(await actions.saveCategory({ id: null, slug: "web-design", name: "Web design", parentId: null, position: 1, active: true, reason })).toEqual({ ok: true });
+    expect(revalidate).toHaveBeenCalledWith("/admin/taxonomy");
+    expect(await actions.setVisibility({ kind: "message", id, hidden: true, reason })).toEqual({ ok: false, code: "invalid" });
   });
 });
