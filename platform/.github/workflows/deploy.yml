@@ -1,0 +1,23 @@
+name: deploy-smoke
+# Vercel deploys from Git (preview per PR, production from main). After a production deployment succeeds,
+# this workflow smoke-tests it. A failure here means: follow docs/runbooks/rollback.md.
+on:
+  deployment_status:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Public page responds and security headers are present
+        env:
+          URL: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          set -euo pipefail
+          curl -fsS -D headers.txt -o /dev/null "$URL/signin"
+          grep -qi '^content-security-policy:' headers.txt
+          grep -qi '^strict-transport-security:' headers.txt
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/dashboard")
+          test "$code" = "307" || { echo "expected anonymous /dashboard to redirect, got $code"; exit 1; }
