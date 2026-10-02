@@ -26,3 +26,9 @@ Stripe Connect · Resend · Sentry · PostHog arrive in later sub-projects / opt
 **Audit.** `audit_log` is append-only (trigger blocks UPDATE/DELETE/TRUNCATE even for the service role); payloads are redacted; IPs are salted-hashed. Privileged server actions go through `adminAction()`.
 
 **Known limits.** In-memory rate-limit fallback is per instance; Upstash makes it global. Real Supabase/R2/Stripe behaviour is verified only on staging (see `docs/acceptance-subproject-1.md`).
+
+## Marketplace core
+- Public surface is whitelisted views only (`public_provider_cards`, `public_service_cards`, `public_open_projects`); base tables stay default-deny for `anon`.
+- All writes go through `SECURITY DEFINER` RPCs that take an explicit `p_org` and re-check the caller's role. Error codes: 42501 not allowed, 22023 invalid, 54000 limit, 23505 duplicate.
+- Search: Postgres full-text (`websearch_to_tsquery`) plus `pg_trgm`, keyset-paginated. Matching is rule-based and returns reasons, never a numeric score; weights live in `platform_settings`.
+- Web layer: dependency-injected factories (`createSearchHandler`, `createActions`, `createCronHandler`, `createEmailNotifier`) wrapped by thin route/server-action files, so logic is unit-testable without a database.
