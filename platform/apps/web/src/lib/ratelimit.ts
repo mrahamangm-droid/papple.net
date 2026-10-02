@@ -8,6 +8,11 @@ export const RULES = {
   auth: { limit: 5, windowSec: 60 },
   onboarding: { limit: 10, windowSec: 60 },
   uploads: { limit: 30, windowSec: 60 },
+  search: { limit: 60, windowSec: 60 },
+  proposal: { limit: 10, windowSec: 60 },
+  message: { limit: 30, windowSec: 60 },
+  report: { limit: 5, windowSec: 60 },
+  conversation: { limit: 10, windowSec: 60 },
 } as const satisfies Record<string, Rule>;
 
 export class RateLimitError extends Error {

@@ -7,6 +7,12 @@ import { headers } from "next/headers";
 import { RULES, RateLimitError, createRateLimiter, enforce, type Rule } from "./ratelimit";
 import { createOnboarding, type OnboardingInput } from "./onboarding";
 import { createSettings } from "./settings";
+import { z } from "zod";
+import { createMarketplaceDb, type Rpc } from "./marketplace/db";
+import { createSearch } from "./marketplace/search";
+import { createPublicData } from "./marketplace/public-data";
+import { createGuardedSearch } from "./marketplace/guarded-search";
+import { PermanentEmailError, createEmailNotifier } from "./marketplace/notify-email";
 import { createServerSupabase, getSessionUser } from "./supabase/server";
 import { createServiceClient } from "./supabase/service";
 
@@ -93,3 +99,87 @@ export async function throttle(rule: keyof typeof RULES, key: string): Promise<b
     throw e;
   }
 }
+
+/** Calls a Postgres function as the current user (or as anon when signed out), so RLS and grants apply. */
+const userRpc: Rpc = async (fn, args) => {
+  const db = await createServerSupabase();
+  const { data, error } = await db.rpc(fn, args);
+  return { data, error: error ? { code: error.code, message: error.message } : null };
+};
+
+export const marketplaceDb = createMarketplaceDb(userRpc);
+
+export const searchService = createSearch({
+  rpc: userRpc,
+  pageSize: () => settings.getSetting("search.page_size", z.number().int().min(1).max(50)),
+});
+
+/** Public single-card lookups through the anon-capable client; RLS and view whitelists apply. */
+export const publicData = createPublicData({
+  fetchOne: async (view, slug) => {
+    const db = await createServerSupabase();
+    const { data, error } = await db.from(view).select("*").eq("slug", slug).maybeSingle();
+    return { data, error: error ? { message: error.message } : null };
+  },
+});
+
+/** Active categories for the search filter. A failure just hides the filter. */
+export async function publicCategories(): Promise<{ id: string; name: string }[]> {
+  try {
+    const db = await createServerSupabase();
+    const { data } = await db.from("categories").select("id, name").eq("is_active", true).order("position").order("name");
+    return (data ?? []) as { id: string; name: string }[];
+  } catch {
+    return [];
+  }
+}
+
+const EMAIL_DELAY_MS = 10 * 60_000;
+const EMAILABLE = ["message_received", "proposal_received"];
+
+/** Sends the neutral unread-nudge emails. Needs RESEND_API_KEY and EMAIL_FROM; without them it fails closed and sends nothing. */
+export async function runEmailNotifier(): Promise<{ sent: number }> {
+  const admin = createServiceClient();
+  const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
+  return createEmailNotifier({
+    delayMs: EMAIL_DELAY_MS,
+    isEnabled: () => settings.isFlagEnabled("marketplace.email_notifications"),
+    loadUnread: async (olderThanMs) => {
+      const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+      const stale = new Date(Date.now() - 24 * 3_600_000).toISOString(); // a day-old nudge is no longer a nudge
+      const { data } = await admin.from("notifications").select("id, user_id, type, payload")
+        .is("read_at", null).is("emailed_at", null).in("type", EMAILABLE).lt("created_at", cutoff).gte("created_at", stale)
+        .order("created_at", { ascending: true }).limit(50);
+      const out: { id: string; userEmail: string; type: string; link: string }[] = [];
+      const noAddress: string[] = [];
+      for (const n of data ?? []) {
+        const payload = (n.payload ?? {}) as { conversation_id?: string; project_id?: string };
+        const path = payload.conversation_id ? `/messages/${payload.conversation_id}` : payload.project_id ? `/projects/${payload.project_id}` : "/notifications";
+        const { data: u } = await admin.auth.admin.getUserById(n.user_id as string);
+        if (u.user?.email) out.push({ id: n.id as string, userEmail: u.user.email, type: n.type as string, link: `${site}${path}` });
+        else noAddress.push(n.id as string); // can never be emailed: retire it so it does not clog the batch
+      }
+      if (noAddress.length) await admin.from("notifications").update({ emailed_at: new Date().toISOString() }).in("id", noAddress);
+      return out;
+    },
+    send: async ({ to, subject, text }) => {
+      const key = process.env.RESEND_API_KEY;
+      const from = process.env.EMAIL_FROM;
+      if (!key || !from || !site) throw new Error("email not configured");
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to, subject, text }),
+      });
+      // 4xx other than 429 means the provider rejected this message or address for good; 429 and 5xx are worth retrying.
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) throw new PermanentEmailError();
+      if (!res.ok) throw new Error(`email provider ${res.status}`);
+    },
+    markEmailed: async (ids) => {
+      await admin.from("notifications").update({ emailed_at: new Date().toISOString() }).in("id", ids);
+    },
+  }).run();
+}
+
+/** Throttled anonymous search for server-rendered pages (same limiter as /api/search). */
+export const guardedSearch = createGuardedSearch({ search: searchService, throttle, ip: clientIp });

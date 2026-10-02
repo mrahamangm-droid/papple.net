@@ -41,7 +41,15 @@ export function decideAccess(ctx: AuthContext | null, cap: Capability, orgId?: s
 export interface NavItem { href: string; label: string }
 
 export function navFor(ctx: AuthContext): NavItem[] {
-  const items: NavItem[] = [{ href: "/dashboard", label: "Dashboard" }];
+  const items: NavItem[] = [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/explore", label: "Explore" },
+    { href: "/projects", label: "Projects" },
+    { href: "/messages", label: "Messages" },
+    { href: "/notifications", label: "Notifications" },
+  ];
+  // Provider tools follow membership (what the database will actually allow), never the persona label.
+  if (ctx.memberships.length > 0) items.push({ href: "/profile", label: "My profile" }, { href: "/services", label: "My services" });
   if (ctx.platformRoles.includes("admin")) items.push({ href: "/admin", label: "Admin" });
   return items;
 }
