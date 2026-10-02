@@ -1,0 +1,11 @@
+{
+  "name": "papple",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "lint": "pnpm -C apps/web lint",
+    "typecheck": "pnpm -C apps/web typecheck",
+    "test": "pnpm -C apps/web test",
+    "build": "pnpm -C apps/web build"
+  }
+}
