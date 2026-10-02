@@ -5,12 +5,12 @@ import type { PaymentsServiceDb } from "./service-db";
 interface Deps {
   provider: Pick<PaymentProvider, "parseWebhook">;
   store: WebhookStore;
-  db: Pick<PaymentsServiceDb, "recordPaymentSucceeded" | "recordPaymentFailed" | "recordAccountUpdate">;
+  db: Pick<PaymentsServiceDb, "recordPaymentSucceeded" | "recordPaymentFailed" | "recordAccountUpdate" | "recordRefundSucceeded">;
   /** Called for outcomes a human must look at (never carries the signature or raw body). */
   alert: (message: string, context: Record<string, unknown>) => void;
 }
 
-const NEEDS_ATTENTION = new Set(["mismatch", "duplicate_charge", "unknown"]);
+const NEEDS_ATTENTION = new Set(["mismatch", "duplicate_charge", "unknown", "paid_on_cancelled"]);
 
 /**
  * Stripe webhook core. Order: verify signature -> normalize -> claim event id -> apply -> mark processed.
@@ -35,6 +35,9 @@ export function createWebhookHandler(deps: Deps) {
           if (NEEDS_ATTENTION.has(result)) deps.alert(`payment webhook outcome: ${result}`, { eventId: event.id, paymentId: event.paymentId });
         } else if (event.kind === "payment_failed") {
           await deps.db.recordPaymentFailed(event.paymentId, event.sessionId);
+        } else if (event.kind === "refund_succeeded") {
+          const result = await deps.db.recordRefundSucceeded({ paymentId: event.paymentId, refundId: event.refundId, amount: event.amount, currency: event.currency });
+          if (NEEDS_ATTENTION.has(result)) deps.alert(`payment webhook outcome: ${result}`, { eventId: event.id, paymentId: event.paymentId });
         } else {
           await deps.db.recordAccountUpdate(event.accountId, event.payoutsEnabled, event.detailsSubmitted);
         }
