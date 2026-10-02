@@ -75,3 +75,15 @@ describe("files.write", () => {
     expect(can({ orgRole: "viewer" }, "files.write")).toBe(false);
   });
 });
+
+describe("navFor marketplace links", () => {
+  const hrefs = (c: AuthContext) => navFor(c).map((i) => i.href);
+  it("gives every signed-in user explore, projects, messages and notifications", () => {
+    expect(hrefs(ctx({ memberships: [] }))).toEqual(expect.arrayContaining(["/explore", "/projects", "/messages", "/notifications"]));
+  });
+  it("shows profile and services only to users with a membership, never by persona alone", () => {
+    expect(hrefs(ctx({ memberships: [], persona: "professional" }))).not.toContain("/profile");
+    expect(hrefs(ctx({ memberships: [], persona: "professional" }))).not.toContain("/services");
+    expect(hrefs(ctx())).toEqual(expect.arrayContaining(["/profile", "/services"]));
+  });
+});
