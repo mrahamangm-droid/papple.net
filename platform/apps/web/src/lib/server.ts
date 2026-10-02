@@ -21,6 +21,8 @@ import * as Sentry from "@sentry/nextjs";
 import { createStripeProvider, type StripeLike } from "./payments/stripe-provider";
 import { createPaymentsServiceDb } from "./payments/service-db";
 import { createWebhookHandler } from "./payments/webhook-handler";
+import { createRefundService } from "./payments/refunds";
+import { createDisputesDb } from "./disputes/db";
 import { createDbWebhookStore } from "./webhooks";
 import type { PaymentProvider } from "./payments/provider";
 
@@ -117,6 +119,8 @@ const userRpc: Rpc = async (fn, args) => {
 
 export const marketplaceDb = createMarketplaceDb(userRpc);
 export const contractsDb = createContractsDb(userRpc);
+/** Rulings run through the admin's own session so the database sees their role and second factor. */
+export const disputesDb = createDisputesDb(userRpc);
 
 export const searchService = createSearch({
   rpc: userRpc,
@@ -211,6 +215,9 @@ export function paymentProvider(): PaymentProvider {
   stripeProvider ??= createStripeProvider(new Stripe(key) as unknown as StripeLike, secrets);
   return stripeProvider;
 }
+
+/** Sends queued refunds. Lazy like the provider: importing this module never needs Stripe keys. */
+export const refundService = () => createRefundService({ db: paymentsServiceDb(), provider: paymentProvider() });
 
 /** Verified Stripe webhook entry point. Answers 503 (Stripe retries) until the keys exist. */
 export async function handleStripeWebhook(rawBody: string, signature: string | null): Promise<{ status: number }> {
