@@ -47,3 +47,10 @@ Stripe Connect · Resend · Sentry · PostHog arrive in later sub-projects / opt
 - Suspension: `is_member` and `has_org_role` ignore memberships of an organization whose status is `suspended`, so its members lose access; platform staff checks, service-role flows (webhooks) and a counterparty's own membership are unaffected. Suspended organizations also leave the public provider views.
 - Verification: `provider_profiles.verified_at` is set only by `review_verification` (admin + aal2) after an owner or admin of the organization sends `request_verification`; `public_provider_cards.verified` exposes it. It means Papple reviewed the evidence supplied, not that a licence or credential was checked.
 - Moderation and taxonomy (SP4c): `moderation_queue`, `hidden_items`, `dismiss_report` and `admin_set_visibility` run for platform staff with aal2 and a 10-1,000 character reason (`staff_reason`/`staff_guard`); hiding actions the target's open reports. `admin_save_category` and `admin_save_skill` are admin + aal2 + reason, never delete, keep slugs fixed, limit categories to two levels, and refuse an active skill under an inactive category. The direct admin write policies and grants on `categories` and `skills` were removed.
+
+## Public surface and hardening
+
+- Legal text is data (`lib/legal-content.ts`) behind one `LEGAL` switch (`lib/legal.ts`); unknown company facts are `null` and render a visible placeholder, never an invented value.
+- `lib/seo.ts` builds `robots.txt` (disallow list derived from `lib/route-gate.ts`) and `sitemap.xml` (whitelisted public views only, degrading to static pages on failure). The `(app)` layout is `noindex`.
+- `app/not-found.tsx`, `error.tsx`, `global-error.tsx` show generic copy and the error digest only.
+- Rate limits cover every user-facing write; `verification` and `filesign` were added in this slice. See `docs/launch-checklist.md`.
