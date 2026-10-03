@@ -19,6 +19,9 @@ describe("settings registry", () => {
   });
   it("does not offer a payments switch that nothing enforces", () => {
     expect("payments.enabled" in SETTINGS).toBe(false);
+    expect(SETTINGS["ai.daily_request_cap"].schema.safeParse(2000).success).toBe(true);
+    expect(SETTINGS["ai.daily_request_cap"].schema.safeParse(-1).success).toBe(false);
+    expect(SETTINGS["ai.daily_request_cap"].schema.safeParse(1.5).success).toBe(false);
   });
 });
 
