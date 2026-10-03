@@ -19,6 +19,7 @@ export const RULES = {
   review: { limit: 5, windowSec: 60 },
   verification: { limit: 5, windowSec: 600 },
   filesign: { limit: 120, windowSec: 60 },
+  ai: { limit: 10, windowSec: 60 },
 } as const satisfies Record<string, Rule>;
 
 export class RateLimitError extends Error {

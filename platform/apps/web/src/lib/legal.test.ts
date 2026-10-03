@@ -42,6 +42,13 @@ describe("legal text matches what the product actually does", () => {
     expect(all).not.toMatch(/shown before you commit/i);
   });
   it("describes the refund ruling as it works", () => expect(JSON.stringify(LEGAL_PAGES.terms)).toMatch(/refund.*(all|every).*payment.*cancel/i));
+  it("discloses the optional AI assistant and its processor", () => {
+    const p = JSON.stringify(LEGAL_PAGES.privacy);
+    expect(p).toContain("Anthropic");
+    expect(p).toMatch(/AI assistant/i);
+    expect(p).toMatch(/only (the )?text you (submit|choose)/i);
+    expect(p).toMatch(/never.*(chat )?messages/i);
+  });
   it("lists every processor the code sends data to", () => {
     const p = JSON.stringify(LEGAL_PAGES.privacy);
     for (const v of ["Sentry", "PostHog", "Upstash", "Vercel"]) expect(p).toContain(v);

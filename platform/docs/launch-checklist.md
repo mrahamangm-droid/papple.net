@@ -15,6 +15,13 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Put `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET` into the app environment yourself. Owner.
 - [ ] Run one real test-mode contract, milestone payment and refund end to end. Owner + Claude.
 
+## AI assistant (optional)
+- [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
+- [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
+- [ ] Review the per-plan monthly allowance (`ai.monthly_message_limits`) and the daily cap (`ai.daily_request_cap`) in Admin → Settings. Owner.
+- [ ] Turn on the `ai.assistant` flag only after the two items above. It is off by default. Owner.
+- [ ] Have the lawyer review the "AI assistant" paragraph of the privacy policy. Owner.
+
 ## Hosting
 - [ ] Create a separate Vercel project for the `platform/` app (the root project serves papple.net). Owner.
 - [ ] Apply the root `tsconfig.json` exclude (`"exclude": ["node_modules", "platform"]`) so the root build stops type-checking `platform/`. Owner (or approve Claude).

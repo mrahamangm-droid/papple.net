@@ -59,8 +59,12 @@ export const LEGAL_PAGES: Record<"terms" | "privacy" | "cookies" | "marketplace-
         "Product analytics run only if you allow them in the consent notice.",
       ] },
       { id: "processors", title: "Who we share it with", body: [
-        "Service providers that run the platform for us: Vercel for hosting, Supabase for database and sign-in, Stripe for payments and payouts, Resend for transactional email, Cloudflare R2 for file storage, Sentry for error monitoring, and Upstash for abuse prevention (rate limits). PostHog provides analytics only if you allow them. Where a feature requires it, they receive only the data needed.",
+        "Service providers that run the platform for us: Vercel for hosting, Supabase for database and sign-in, Stripe for payments and payouts, Resend for transactional email, Cloudflare R2 for file storage, Sentry for error monitoring, and Upstash for abuse prevention (rate limits). PostHog provides analytics only if you allow them. Anthropic provides the optional AI assistant described below. Where a feature requires it, they receive only the data needed.",
         "Other users see what you choose to publish and what a contract requires. Authorities receive data only when the law requires it.",
+      ] },
+      { id: "ai", title: "The AI assistant (optional)", body: [
+        "Where it is switched on, you can ask the AI assistant to draft or improve text, such as a proposal, a profile summary, a service description or a project brief. It is never required and never acts for you: you read, edit and send the text yourself.",
+        "When you use it, Anthropic receives only the text you submit for that request, plus the project or profile details needed to write it. We never send chat messages to it. We record that a request happened and how large it was, to apply usage limits, but we do not store the text you sent or the answer you received.",
       ] },
       { id: "keep", title: "How long we keep it", body: [
         "We keep account and contract records while your account is active and for as long as needed for accounting, dispute and legal reasons. Ask us if you want a specific record deleted; we will say what must be kept and why.",

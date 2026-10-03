@@ -101,5 +101,6 @@ describe("hardening rules", () => {
   it("covers verification requests and signed downloads", () => {
     expect(RULES.verification.limit).toBeLessThanOrEqual(10);
     expect(RULES.filesign.limit).toBeGreaterThan(0);
+    expect(RULES.ai).toEqual({ limit: 10, windowSec: 60 });
   });
 });
