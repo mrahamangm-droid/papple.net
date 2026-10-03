@@ -54,3 +54,9 @@ Stripe Connect · Resend · Sentry · PostHog arrive in later sub-projects / opt
 - `lib/seo.ts` builds `robots.txt` (disallow list derived from `lib/route-gate.ts`) and `sitemap.xml` (whitelisted public views only, degrading to static pages on failure). The `(app)` layout is `noindex`.
 - `app/not-found.tsx`, `error.tsx`, `global-error.tsx` show generic copy and the error digest only.
 - Rate limits cover every user-facing write; `verification` and `filesign` were added in this slice. See `docs/launch-checklist.md`.
+
+## AI assistant
+
+- Optional, suggestion-only writing help (proposal draft, profile/service polish, brief improvement). Off by default through the `ai.assistant` flag; hidden when `ANTHROPIC_API_KEY` is absent.
+- `ai_reserve` / `ai_finish` (migration 0029) meter use per organization per month (`ai.monthly_message_limits` via `org_limit`) and platform-wide per day (`ai.daily_request_cap`) under an advisory lock; failed calls do not consume allowance. `ai_usage` stores counts only, never prompts or answers, and has no direct access.
+- `lib/ai`: prompt builders fence untrusted text, an Anthropic Messages client over fetch with generic errors, and a service that validates, reserves, calls, finishes and sanitises output. `/admin/ai` shows usage (admin + aal2).
