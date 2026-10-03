@@ -94,5 +94,11 @@ check "the newest subscription event wins under parallel deliveries" "$(q "selec
 hold; for n in 1 2 3 4; do svc "select apply_subscription_event('$O_PRO2','cus_x','sub_r','price_race','active',null,false,'2026-10-02T00:00:0$n+00')" & done; wait
 check "a subscription id belongs to one organization only" "$(q "select count(distinct org_id) from subscriptions where stripe_subscription_id='sub_r'")" 1
 
+# 11. issuing the same invoice from many tabs creates one invoice with one number
+q "insert into billing_profiles (org_id, legal_name, address, country, tax_number, tax_bps) values ('$O_PRO','Race Pro LLC','Office 1, Dubai','AE','TRN-1',500)"
+hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO "select issue_invoice('$O_PRO','99999999-0000-0000-0000-0000000000a1')" & done; wait
+check "one invoice per milestone under parallel issuing" "$(q "select count(*) from invoices where org_id='$O_PRO'")" 1
+check "the first invoice number is 000001" "$(q "select right(number,6) from invoices where org_id='$O_PRO'")" 000001
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
