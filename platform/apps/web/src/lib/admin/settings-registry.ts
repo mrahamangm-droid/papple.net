@@ -15,6 +15,7 @@ export const SETTINGS: Record<string, SettingDef> = {
   "reviews.reveal_after_days": { label: "Review reveal delay", unit: "days", schema: int(1, 90), risky: false, help: "A one-sided review becomes visible after this many days." },
   "contracts.max_milestones": { label: "Maximum milestones per contract", unit: "count", schema: int(1, 100), risky: false, help: "" },
   "limits.max_orgs_per_user": { label: "Maximum organizations per user", unit: "count", schema: int(1, 100), risky: false, help: "" },
+  "billing.grace_days": { label: "Billing grace period", unit: "days", schema: int(0, 30), risky: false, help: "How long a failed subscription payment keeps paid features before the organization falls back to Free." },
   "ai.daily_request_cap": { label: "AI daily request cap (all users)", unit: "count", schema: int(0, 1_000_000), risky: false, help: "0 turns AI off until you change it again. Counts requests across the whole platform." },
   "ai.monthly_message_limits": { label: "AI monthly message limits", unit: "json", schema: z.record(z.string().min(1).max(40), int(0, 10_000_000).nullable()), risky: false, help: 'JSON object per plan, null = by contract, e.g. {"free":20}.' },
 };
