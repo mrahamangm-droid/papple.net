@@ -82,3 +82,24 @@ describe("createRateLimiter", () => {
     expect((await l.check("k", 1, 60)).allowed).toBe(false);
   });
 });
+
+describe("marketplace rules", () => {
+  it("defines the marketplace limits", () => {
+    expect(RULES.search).toEqual({ limit: 60, windowSec: 60 });
+    expect(RULES.proposal).toEqual({ limit: 10, windowSec: 60 });
+    expect(RULES.message).toEqual({ limit: 30, windowSec: 60 });
+    expect(RULES.report).toEqual({ limit: 5, windowSec: 60 });
+    expect(RULES.conversation).toEqual({ limit: 10, windowSec: 60 });
+    expect(RULES.contract).toEqual({ limit: 30, windowSec: 60 });
+    expect(RULES.checkout).toEqual({ limit: 10, windowSec: 60 });
+    expect(RULES.dispute).toEqual({ limit: 5, windowSec: 60 });
+    expect(RULES.review).toEqual({ limit: 5, windowSec: 60 });
+  });
+});
+
+describe("hardening rules", () => {
+  it("covers verification requests and signed downloads", () => {
+    expect(RULES.verification.limit).toBeLessThanOrEqual(10);
+    expect(RULES.filesign.limit).toBeGreaterThan(0);
+  });
+});
