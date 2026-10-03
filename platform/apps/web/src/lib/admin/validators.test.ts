@@ -21,6 +21,9 @@ describe("settings registry", () => {
     expect("payments.enabled" in SETTINGS).toBe(false);
     expect(SETTINGS["ai.daily_request_cap"].schema.safeParse(2000).success).toBe(true);
     expect(SETTINGS["ai.daily_request_cap"].schema.safeParse(-1).success).toBe(false);
+    expect(SETTINGS["billing.grace_days"].schema.safeParse(7).success).toBe(true);
+    expect(SETTINGS["billing.grace_days"].schema.safeParse(31).success).toBe(false);
+    expect(SETTINGS["billing.grace_days"].schema.safeParse(-1).success).toBe(false);
     expect(SETTINGS["ai.daily_request_cap"].schema.safeParse(1.5).success).toBe(false);
   });
 });

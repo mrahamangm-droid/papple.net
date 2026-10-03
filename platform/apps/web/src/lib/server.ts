@@ -27,6 +27,8 @@ import { createDisputesDb } from "./disputes/db";
 import { createDbWebhookStore } from "./webhooks";
 import { createAiService } from "./ai/service";
 import { createAnthropicClient } from "./ai/client";
+import { createBillingService } from "./billing/service";
+import { createStripeBilling, type StripeBillingLike } from "./payments/billing-provider";
 import { formatMinor } from "./marketplace/present";
 import type { PaymentProvider } from "./payments/provider";
 
@@ -289,4 +291,30 @@ export const aiService = createAiService({
     const skills = ((sk ?? []) as unknown as { skills: { name: string } | { name: string }[] | null }[]).flatMap((r) => (Array.isArray(r.skills) ? r.skills : r.skills ? [r.skills] : []).map((x) => x.name));
     return { project: { title: proj.title as string, description: proj.description as string, budget }, profile: { headline: prof.headline as string, summary: (prof.summary as string) ?? "", skills } };
   },
+});
+
+/** Subscription billing on the platform Stripe account. Null until STRIPE_SECRET_KEY exists; the page then says billing is unavailable. */
+function billingProvider() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  return key ? createStripeBilling(new Stripe(key) as unknown as StripeBillingLike) : null;
+}
+
+export const billingService = createBillingService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("billing", `user:${userId}`),
+  canManageBilling: async (orgId) => {
+    const { data, error } = await userRpc("can_manage_billing", { p_org: orgId });
+    if (error) throw new Error("billing check failed");
+    return data === true;
+  },
+  loadPlan: async (key) => {
+    const { data } = await createServiceClient().from("plans").select("key, active, stripe_price_id").eq("key", key).maybeSingle();
+    return data ? { key: data.key as string, active: data.active as boolean, stripePriceId: (data.stripe_price_id as string | null) ?? null } : null;
+  },
+  loadSubscription: async (orgId) => {
+    const { data } = await createServiceClient().from("subscriptions").select("status, stripe_customer_id").eq("org_id", orgId).maybeSingle();
+    return data ? { status: data.status as string, customerId: (data.stripe_customer_id as string | null) ?? null } : null;
+  },
+  get billing() { return billingProvider(); },
+  siteUrl: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://papple.net").replace(/\/$/, ""),
 });

@@ -87,5 +87,12 @@ q "update feature_flags set enabled=true where key='ai.assistant'; update platfo
 hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO "select ai_reserve('$O_PRO','proposal_draft')" & done; wait
 check "the monthly AI allowance holds under parallel reservations" "$(q "select count(*) from ai_usage where org_id='$O_PRO'")" 3
 
+# 10. parallel subscription webhooks for one organization end on the newest event, and one subscription id never lands on two organizations
+q "update plans set stripe_price_id='price_race' where key='business'"
+hold; for n in 1 2 3 4 5 6 7 8; do svc "select apply_subscription_event('$O_PRO','cus_r','sub_r','price_race','active',now() + interval '30 days',false,'2026-10-01T00:00:0$n+00')" & done; wait
+check "the newest subscription event wins under parallel deliveries" "$(q "select event_at = '2026-10-01T00:00:08+00' from subscriptions where org_id='$O_PRO'")" t
+hold; for n in 1 2 3 4; do svc "select apply_subscription_event('$O_PRO2','cus_x','sub_r','price_race','active',null,false,'2026-10-02T00:00:0$n+00')" & done; wait
+check "a subscription id belongs to one organization only" "$(q "select count(distinct org_id) from subscriptions where stripe_subscription_id='sub_r'")" 1
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }

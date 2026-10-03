@@ -15,6 +15,13 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Put `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET` into the app environment yourself. Owner.
 - [ ] Run one real test-mode contract, milestone payment and refund end to end. Owner + Claude.
 
+## Plans and billing
+- [ ] Enable Stripe Billing on the platform account and turn on the customer portal (cancel, update card, invoices). Owner.
+- [ ] In Stripe create one recurring Price per paid plan (Professional Plus, Business), then store each id on the plan (`plans.stripe_price_id`, SQL editor or the Plans page when it supports it). Plans without a price cannot be bought. Owner.
+- [ ] Add `customer.subscription.created`, `customer.subscription.updated` and `customer.subscription.deleted` to the platform webhook endpoint `we_1UM8HXChhnG4ffxfhQtMpBbd`. Owner (or approve Claude to do it).
+- [ ] Set `billing.grace_days` (default 7) in Admin settings: how long a failed payment keeps paid features. Owner.
+- [ ] Run one test-mode subscription: buy, see the plan change, fail a payment with a Stripe test card, cancel in the portal. Owner + Claude. Webhooks alert (Sentry) on `unknown_org`, `unknown_plan` and `conflict` outcomes.
+
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
 - [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
@@ -39,7 +46,7 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 
 ## Verified in code (Claude)
 - [x] Nonce CSP, HSTS, nosniff, frame-ancestors none on every route (`proxy.ts`).
-- [x] Rate limits on auth, search, uploads, signed downloads, proposals, messages, reports, contracts, checkout, disputes, reviews, verification requests.
+- [x] Rate limits on auth, search, uploads, signed downloads, proposals, messages, reports, contracts, checkout, disputes, reviews, verification requests, billing.
 - [x] `robots.txt` blocks signed-in areas; `sitemap.xml` lists only public views; signed-in pages are `noindex`.
 - [x] Branded 404, error and global error pages that never show server text.
 - [x] `/.well-known/security.txt` never publishes an unconfirmed contact.
