@@ -22,6 +22,10 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Set `billing.grace_days` (default 7) in Admin settings: how long a failed payment keeps paid features. Owner.
 - [ ] Run one test-mode subscription: buy, see the plan change, fail a payment with a Stripe test card, cancel in the portal. Owner + Claude. Webhooks alert (Sentry) on `unknown_org`, `unknown_plan` and `conflict` outcomes.
 
+## Invoicing
+- [ ] Have an accountant review the invoice template (`INVOICE` in `lib/invoices/present.ts`) against UAE tax invoice rules, then set `INVOICE.reviewed = true`. Until then every invoice says it has not been reviewed and is titled "Invoice", never "Tax Invoice". Owner.
+- [ ] Decide how Papple's own commission and client fee are invoiced (not built yet; provider invoices cover only the milestone price). Owner + accountant.
+
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
 - [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
