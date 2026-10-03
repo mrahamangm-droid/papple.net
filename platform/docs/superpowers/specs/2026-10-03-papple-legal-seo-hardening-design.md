@@ -20,7 +20,7 @@ Make the public surface launch-ready: legal pages the owner can have reviewed, s
 - The `(app)` layout sets `robots: { index: false, follow: false }`.
 
 ## 3. Resilience pages
-`app/not-found.tsx` (real 404 status), `app/error.tsx` (client boundary with Try again; shows a generic message and the error `digest` only, never `error.message`), `app/global-error.tsx` (renders its own html/body). `/status` returns a static "operational" page with no secrets, and `/.well-known/security.txt` is a route handler built from `LEGAL.securityContact` (placeholder until confirmed, so the file states it is unconfirmed rather than pointing to a fake mailbox).
+`app/not-found.tsx` (real 404 status), `app/error.tsx` (client boundary with Try again; shows a generic message and the error `digest` only, never `error.message`), `app/global-error.tsx` (renders its own html/body). `/status` returns a static "operational" page with no secrets, and `/.well-known/security.txt` (rewritten to `/security-txt`) is a route handler built from `LEGAL.securityContact` (placeholder until confirmed, so the file states it is unconfirmed rather than pointing to a fake mailbox).
 
 ## 4. Consent
 No change to the analytics banner. The cookies page documents it. Test: the banner stays hidden without a PostHog key.
