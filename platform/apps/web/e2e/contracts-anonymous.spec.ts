@@ -27,7 +27,7 @@ test("the webhook only accepts POST", async ({ request }) => {
   expect(res.status()).toBe(405);
 });
 
-for (const path of ["/admin/disputes", "/admin/disputes/11111111-1111-4111-8111-111111111111", "/admin/settings", "/admin/plans", "/admin/audit", "/admin/organizations", "/admin/staff", "/admin/verification"]) {
+for (const path of ["/admin/disputes", "/admin/disputes/11111111-1111-4111-8111-111111111111", "/admin/settings", "/admin/plans", "/admin/audit", "/admin/organizations", "/admin/staff", "/admin/verification", "/admin/reports", "/admin/reports/hidden", "/admin/taxonomy"]) {
   test(`admin area ${path} redirects to /signin`, async ({ request }) => {
     const res = await request.get(path, { maxRedirects: 0 });
     expect(res.status()).toBe(307);

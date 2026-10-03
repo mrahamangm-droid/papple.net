@@ -13,3 +13,6 @@ Hire from a shortlisted proposal, agree milestones, pay per milestone through St
 
 ## Admin console (Sub-project 4b)
 Settings, feature flags and plans, an audit-log viewer, organization suspension, staff roles and provider verification. Spec: `docs/superpowers/specs/2026-10-02-papple-admin-console-design.md`. What is and is not verified: `docs/acceptance-subproject-4b.md`.
+
+## Admin console, slice 2 (Sub-project 4c)
+Moderation queue, hidden-items list, taxonomy editor and an overview page. Spec: `docs/superpowers/specs/2026-10-02-papple-admin-moderation-design.md`. What is and is not verified: `docs/acceptance-subproject-4c.md`.

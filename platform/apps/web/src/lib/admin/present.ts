@@ -25,5 +25,10 @@ const ACTIONS: Record<string, string> = {
   "verification.review": "Verification reviewed",
   "verification.revoke": "Verification revoked",
   "dispute.resolve": "Dispute ruled",
+  "marketplace.hide": "Item hidden",
+  "marketplace.unhide": "Item restored",
+  "moderation.dismiss": "Report dismissed",
+  "admin.category.save": "Category saved",
+  "admin.skill.save": "Skill saved",
 };
 export const describeAuditAction = (a: string) => ACTIONS[a] ?? a;

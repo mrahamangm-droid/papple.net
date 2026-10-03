@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 import { InvalidInputError, NotAllowedError } from "../marketplace/errors";
 import type { AdminConsoleDb } from "./db";
+import { categoryInput, dismissInput, hideInput, skillInput } from "./moderation";
 import { flagInput, orgStatusInput, planInput, revokeVerificationInput, roleInput, settingInput, verificationRequestInput, verificationReviewInput } from "./validators";
 
 export type ConsoleResult = { ok: true } | { ok: false; code: "forbidden" | "invalid" | "error" };
@@ -37,6 +38,10 @@ export function createAdminConsoleActions(deps: Deps) {
     updatePlan: (raw: unknown) => run(raw, planInput, true, ["/admin/plans"], (v) => deps.db.updatePlan(v)),
     setOrgStatus: (raw: unknown) => run(raw, orgStatusInput, true, ["/admin/organizations"], (v) => deps.db.setOrgStatus(v)),
     setPlatformRole: (raw: unknown) => run(raw, roleInput, true, ["/admin/staff"], (v) => deps.db.setPlatformRole(v)),
+    setVisibility: (raw: unknown) => run(raw, hideInput, true, ["/admin/reports", "/admin/reports/hidden"], (v) => deps.db.setVisibility(v)),
+    dismissReport: (raw: unknown) => run(raw, dismissInput, true, ["/admin/reports"], (v) => deps.db.dismissReport(v)),
+    saveCategory: (raw: unknown) => run(raw, categoryInput, true, ["/admin/taxonomy"], (v) => deps.db.saveCategory(v)),
+    saveSkill: (raw: unknown) => run(raw, skillInput, true, ["/admin/taxonomy"], (v) => deps.db.saveSkill(v)),
     reviewVerification: (raw: unknown) => run(raw, verificationReviewInput, true, ["/admin/verification"], (v) => deps.db.reviewVerification(v)),
     revokeVerification: (raw: unknown) => run(raw, revokeVerificationInput, true, ["/admin/verification", "/admin/organizations"], (v) => deps.db.revokeVerification(v)),
     /** A professional action, not an admin one: the database checks the caller owns or administers the organization. */
