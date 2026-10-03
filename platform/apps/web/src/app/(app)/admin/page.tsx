@@ -25,7 +25,7 @@ export default async function AdminHome() {
     { href: "/admin/verification", label: "Pending verifications", n: verifications.count },
     { href: "/admin/organizations", label: "Suspended organizations", n: suspended.count },
   ];
-  const tools = [["/admin/settings", "Settings and flags"], ["/admin/plans", "Plans"], ["/admin/taxonomy", "Taxonomy"], ["/admin/staff", "Staff"], ["/admin/audit", "Audit log"]];
+  const tools = [["/admin/settings", "Settings and flags"], ["/admin/plans", "Plans"], ["/admin/taxonomy", "Taxonomy"], ["/admin/staff", "Staff"], ["/admin/ai", "AI usage"], ["/admin/audit", "Audit log"]];
   return (
     <AppShell ctx={ctx}>
       <h1 className="text-2xl font-semibold">Admin</h1>
