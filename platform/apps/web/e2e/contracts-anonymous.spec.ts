@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/contracts", "/contracts/11111111-1111-4111-8111-111111111111", "/settings/payouts", "/settings/verification"]) {
+for (const path of ["/contracts", "/contracts/11111111-1111-4111-8111-111111111111", "/settings/payouts", "/settings/verification", "/settings/billing", "/settings/invoicing", "/contracts/11111111-1111-4111-8111-111111111111/invoices/22222222-2222-4222-8222-222222222222"]) {
   test(`signed-in area ${path} redirects to /signin`, async ({ request }) => {
     const res = await request.get(path, { maxRedirects: 0 });
     expect(res.status()).toBe(307);
