@@ -17,6 +17,8 @@ const serverShape = {
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   SENTRY_DSN: z.string().url().optional(),
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  AI_MODEL: z.string().min(1).max(100).optional(),
 };
 
 export type ServerEnv = z.infer<z.ZodObject<typeof serverShape>>;

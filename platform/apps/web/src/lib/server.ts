@@ -25,6 +25,9 @@ import { createRefundService } from "./payments/refunds";
 import { createAdminConsoleDb } from "./admin/db";
 import { createDisputesDb } from "./disputes/db";
 import { createDbWebhookStore } from "./webhooks";
+import { createAiService } from "./ai/service";
+import { createAnthropicClient } from "./ai/client";
+import { formatMinor } from "./marketplace/present";
 import type { PaymentProvider } from "./payments/provider";
 
 /** Production wiring of the dependency-injected services. Server-only. */
@@ -240,3 +243,50 @@ export async function handleStripeWebhook(rawBody: string, signature: string | n
     },
   })(rawBody, signature);
 }
+
+
+/** The assistant is offered only when a provider key exists and the `ai.assistant` flag is on for the organization. */
+function aiClient() {
+  try {
+    const env = parseServerEnv(process.env);
+    return env.ANTHROPIC_API_KEY ? createAnthropicClient({ apiKey: env.ANTHROPIC_API_KEY, model: env.AI_MODEL ?? "claude-sonnet-5-5" }) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function aiKeyConfigured(): boolean {
+  try { return !!parseServerEnv(process.env).ANTHROPIC_API_KEY; } catch { return false; }
+}
+
+export async function aiEnabledFor(orgId?: string): Promise<boolean> {
+  try {
+    if (!parseServerEnv(process.env).ANTHROPIC_API_KEY) return false;
+    return await settings.isFlagEnabled("ai.assistant", orgId);
+  } catch {
+    return false;
+  }
+}
+
+export const aiService = createAiService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("ai", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  get client() { return aiClient(); },
+  loadProposalContext: async (orgId, projectId) => {
+    const db = await createServerSupabase();
+    const { data: proj } = await db.from("projects").select("title, description, budget_min, budget_max, currency").eq("id", projectId).eq("status", "open").maybeSingle();
+    if (!proj) return null;
+    const { data: prof } = await db.from("provider_profiles").select("id, headline, summary").eq("org_id", orgId).maybeSingle();
+    if (!prof) return null;
+    const { data: sk } = await db.from("provider_skills").select("skills(name)").eq("profile_id", prof.id);
+    const cur = proj.currency as string;
+    const lo = proj.budget_min as number | null; const hi = proj.budget_max as number | null;
+    const budget = lo != null && hi != null ? `${formatMinor(lo, cur)} to ${formatMinor(hi, cur)}` : lo != null ? `from ${formatMinor(lo, cur)}` : hi != null ? `up to ${formatMinor(hi, cur)}` : undefined;
+    const skills = ((sk ?? []) as unknown as { skills: { name: string } | { name: string }[] | null }[]).flatMap((r) => (Array.isArray(r.skills) ? r.skills : r.skills ? [r.skills] : []).map((x) => x.name));
+    return { project: { title: proj.title as string, description: proj.description as string, budget }, profile: { headline: prof.headline as string, summary: (prof.summary as string) ?? "", skills } };
+  },
+});

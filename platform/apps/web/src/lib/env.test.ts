@@ -43,6 +43,19 @@ describe("parseServerEnv", () => {
   });
 });
 
+describe("AI environment", () => {
+  it("is optional and never required to boot", () => {
+    const e = parseServerEnv(valid);
+    expect(e.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(e.AI_MODEL).toBeUndefined();
+  });
+  it("accepts a key and model and never echoes the key in errors", () => {
+    expect(parseServerEnv({ ...valid, ANTHROPIC_API_KEY: "sk-ant-secret", AI_MODEL: "claude-sonnet-5-5" }).AI_MODEL).toBe("claude-sonnet-5-5");
+    expect(() => parseServerEnv({ ...valid, SUPABASE_SERVICE_ROLE_KEY: "", ANTHROPIC_API_KEY: "sk-ant-secret" })).toThrow(/SUPABASE_SERVICE_ROLE_KEY/);
+    try { parseServerEnv({ ...valid, SUPABASE_SERVICE_ROLE_KEY: "", ANTHROPIC_API_KEY: "sk-ant-secret" }); } catch (e) { expect(String(e)).not.toContain("sk-ant-secret"); }
+  });
+});
+
 describe("parsePublicEnv", () => {
   it("only exposes public keys", () => {
     const env = parsePublicEnv(valid);
