@@ -7,7 +7,7 @@ import { signOutAction } from "@/app/(auth)/actions";
 export function AppShell({ ctx, children }: { ctx: AuthContext; children: ReactNode }) {
   return (
     <div className="min-h-screen">
-      <header className="border-b border-neutral-200 dark:border-neutral-800">
+      <header className="border-b border-neutral-200 print:hidden dark:border-neutral-800">
         <nav aria-label="Main" className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
           <Link href="/dashboard" className="font-semibold">{BRAND.name}</Link>
           <ul className="flex flex-1 gap-4 text-sm">
