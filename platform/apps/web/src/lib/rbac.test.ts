@@ -64,6 +64,11 @@ describe("navFor", () => {
     expect(navFor(ctx()).map((i) => i.href)).not.toContain("/admin");
     expect(navFor(ctx({ platformRoles: ["admin"] })).map((i) => i.href)).toContain("/admin");
   });
+  it("shows Billing only to organization owners", () => {
+    expect(navFor(ctx()).map((i) => i.href)).not.toContain("/settings/billing");
+    expect(navFor(ctx({ memberships: [{ orgId: "o1", role: "admin" }] })).map((i) => i.href)).not.toContain("/settings/billing");
+    expect(navFor(ctx({ memberships: [{ orgId: "o1", role: "owner" }] })).map((i) => i.href)).toContain("/settings/billing");
+  });
   it("always includes the dashboard", () => {
     expect(navFor(ctx()).map((i) => i.href)).toContain("/dashboard");
   });
@@ -73,5 +78,22 @@ describe("files.write", () => {
   it("lets owner, admin and member upload; viewer cannot", () => {
     for (const role of ["owner", "admin", "member"] as const) expect(can({ orgRole: role }, "files.write")).toBe(true);
     expect(can({ orgRole: "viewer" }, "files.write")).toBe(false);
+  });
+});
+
+describe("navFor marketplace links", () => {
+  const hrefs = (c: AuthContext) => navFor(c).map((i) => i.href);
+  it("gives every signed-in user explore, projects, messages and notifications", () => {
+    expect(hrefs(ctx({ memberships: [] }))).toEqual(expect.arrayContaining(["/explore", "/projects", "/messages", "/notifications"]));
+  });
+  it("shows profile and services only to users with a membership, never by persona alone", () => {
+    expect(hrefs(ctx({ memberships: [], persona: "professional" }))).not.toContain("/profile");
+    expect(hrefs(ctx({ memberships: [], persona: "professional" }))).not.toContain("/services");
+    expect(hrefs(ctx())).toEqual(expect.arrayContaining(["/profile", "/services"]));
+  });
+  it("shows contracts and payouts only to users who belong to an organization", () => {
+    expect(hrefs(ctx({ memberships: [] }))).not.toContain("/contracts");
+    expect(hrefs(ctx({ memberships: [] }))).not.toContain("/settings/payouts");
+    expect(hrefs(ctx())).toEqual(expect.arrayContaining(["/contracts", "/settings/payouts"]));
   });
 });
