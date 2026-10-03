@@ -71,6 +71,19 @@ describe("admin console actions", () => {
     expect(revalidate).toHaveBeenCalledWith("/settings/verification");
     expect(await actions.requestVerification({ orgId: id, note: "short", url: "" })).toEqual({ ok: false, code: "invalid" });
   });
+  it("rate-limits verification requests per user and never reaches the database when limited", async () => {
+    const db = setup(false).db;
+    const a = createAdminConsoleActions({ db, revalidate: vi.fn(), hasSecondFactor: async () => false, throttleUser: async () => false });
+    expect(await a.requestVerification({ orgId: id, note: "Registered company number 123", url: "" })).toEqual({ ok: false, code: "rate" });
+    expect(db.requestVerification).not.toHaveBeenCalled();
+  });
+  it("does not spend rate-limit budget on invalid input", async () => {
+    const db = setup(false).db;
+    const throttleUser = vi.fn(async () => true);
+    const a = createAdminConsoleActions({ db, revalidate: vi.fn(), hasSecondFactor: async () => false, throttleUser });
+    expect(await a.requestVerification({ orgId: id, note: "short", url: "" })).toEqual({ ok: false, code: "invalid" });
+    expect(throttleUser).not.toHaveBeenCalled();
+  });
   it("refreshes the queue after a review", async () => {
     const { actions, revalidate } = setup();
     expect(await actions.reviewVerification({ requestId: id, decision: "approved", note: reason })).toEqual({ ok: true });

@@ -4,13 +4,15 @@ import type { AdminConsoleDb } from "./db";
 import { categoryInput, dismissInput, hideInput, skillInput } from "./moderation";
 import { flagInput, orgStatusInput, planInput, revokeVerificationInput, roleInput, settingInput, verificationRequestInput, verificationReviewInput } from "./validators";
 
-export type ConsoleResult = { ok: true } | { ok: false; code: "forbidden" | "invalid" | "error" };
+export type ConsoleResult = { ok: true } | { ok: false; code: "forbidden" | "invalid" | "error" | "rate" };
 
 interface Deps {
   db: AdminConsoleDb;
   revalidate: (path: string) => void;
   /** The admin's session is at aal2. The database checks it too; this keeps a request without it from reaching the database at all. */
   hasSecondFactor: () => Promise<boolean>;
+  /** Per-user rate limit for actions open to ordinary users. Returns false when the caller is over the limit. */
+  throttleUser?: () => Promise<boolean>;
 }
 
 /** Admin-only wrapping (admin check + audit) happens where these are exposed (adminAction). Expected failures return codes and never throw. */
@@ -45,6 +47,11 @@ export function createAdminConsoleActions(deps: Deps) {
     reviewVerification: (raw: unknown) => run(raw, verificationReviewInput, true, ["/admin/verification"], (v) => deps.db.reviewVerification(v)),
     revokeVerification: (raw: unknown) => run(raw, revokeVerificationInput, true, ["/admin/verification", "/admin/organizations"], (v) => deps.db.revokeVerification(v)),
     /** A professional action, not an admin one: the database checks the caller owns or administers the organization. */
-    requestVerification: (raw: unknown) => run(raw, verificationRequestInput, false, ["/settings/verification"], (v) => deps.db.requestVerification(v)),
+    requestVerification: async (raw: unknown): Promise<ConsoleResult> => {
+      // Validate first so typos in the form do not use up the user's budget.
+      if (!verificationRequestInput.safeParse(raw).success) return { ok: false, code: "invalid" };
+      if (deps.throttleUser && !(await deps.throttleUser())) return { ok: false, code: "rate" };
+      return run(raw, verificationRequestInput, false, ["/settings/verification"], (v) => deps.db.requestVerification(v));
+    },
   };
 }
