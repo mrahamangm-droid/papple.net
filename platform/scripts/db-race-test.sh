@@ -134,5 +134,10 @@ q "insert into memberships (user_id,org_id,role) select u,'$O_T','owner' from (s
 hold; as $U_T1 "select team_leave('$O_T')" & as $U_T2 "select team_leave('$O_T')" & wait
 check "two owners leaving together leave one member" "$(q "select count(*) from memberships where org_id='$O_T'")" 1
 
+# 16. the credential limit holds under parallel saves
+q "update platform_settings set value='{\"default\":3}' where key='limits.credentials'"
+hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO "select credential_save('$O_PRO',null,'award','Race award $n','Race body',null,null,null,null)" & done; wait
+check "the credential limit holds under parallel saves" "$(q "select count(*) from provider_credentials where org_id='$O_PRO'")" 3
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
