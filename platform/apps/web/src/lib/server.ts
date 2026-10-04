@@ -34,6 +34,7 @@ import { signUnsubscribeToken } from "./crm/unsubscribe";
 import { createUnsubscribeHandler } from "./crm/unsubscribe-handler";
 import { createResendWebhook } from "./crm/resend-webhook";
 import { createCredentialService } from "./credentials/service";
+import { createTalentService } from "./talent/service";
 import { createTeamService } from "./team/service";
 import { buildInviteEmail, createInviteMailer } from "./team/email";
 import { newInviteToken } from "./team/token";
@@ -356,6 +357,17 @@ const displayName = (name: string) => name.replace(/[\r\n"<>,;:\\]/g, " ").repla
 export const credentialService = (revalidate: (path: string) => void) => createCredentialService({
   getUserId: async () => (await getSessionUser())?.id ?? null,
   throttle: (userId) => throttle("credential", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
+});
+
+/** Talent pools and invitations run through the signed-in user's own session: the database decides who may add, invite or decline. */
+export const talentService = (revalidate: (path: string) => void) => createTalentService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("talent", `user:${userId}`),
   rpc: async (fn, args) => {
     const { data, error } = await userRpc(fn, args);
     return { data, error: error ? { code: error.code } : null };
