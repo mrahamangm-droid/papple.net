@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/contracts", "/contracts/11111111-1111-4111-8111-111111111111", "/settings/payouts", "/settings/verification", "/settings/billing", "/settings/invoicing", "/crm", "/crm/33333333-3333-4333-8333-333333333333", "/settings/team", "/settings/credentials", "/talent", "/talent/11111111-1111-4111-8111-111111111111", "/invitations", "/analytics", "/invite/" + "a".repeat(43), "/invite/short","/contracts/11111111-1111-4111-8111-111111111111/invoices/22222222-2222-4222-8222-222222222222"]) {
+for (const path of ["/contracts", "/contracts/11111111-1111-4111-8111-111111111111", "/settings/payouts", "/settings/verification", "/settings/billing", "/settings/invoicing", "/settings/api-keys", "/crm", "/crm/33333333-3333-4333-8333-333333333333", "/settings/team", "/settings/credentials", "/talent", "/talent/11111111-1111-4111-8111-111111111111", "/invitations", "/analytics", "/invite/" + "a".repeat(43), "/invite/short","/contracts/11111111-1111-4111-8111-111111111111/invoices/22222222-2222-4222-8222-222222222222"]) {
   test(`signed-in area ${path} redirects to /signin`, async ({ request }) => {
     const res = await request.get(path, { maxRedirects: 0 });
     expect(res.status()).toBe(307);
@@ -56,3 +56,15 @@ for (const path of ["/admin/disputes", "/admin/disputes/11111111-1111-4111-8111-
     expect(res.headers().location).toContain(`/signin?next=${encodeURIComponent(path)}`);
   });
 }
+
+test("the read-only API refuses requests without a well formed key and never redirects", async ({ request }) => {
+  for (const path of ["projects", "proposals", "contracts", "analytics"]) {
+    for (const headers of [{} as Record<string, string>, { authorization: "Bearer nope" }, { authorization: "Basic abc" }]) {
+      const res = await request.get(`/api/v1/${path}`, { headers, maxRedirects: 0 });
+      expect(res.status(), path).toBe(401);
+      expect(res.headers()["cache-control"]).toBe("no-store");
+      expect(await res.json()).toEqual({ error: "unauthorized" });
+    }
+  }
+  expect((await request.post("/api/v1/projects", { maxRedirects: 0 })).status()).toBe(405);
+});

@@ -36,6 +36,8 @@ import { createResendWebhook } from "./crm/resend-webhook";
 import { createCredentialService } from "./credentials/service";
 import { createTalentService } from "./talent/service";
 import { createAnalyticsService } from "./analytics/service";
+import { createApiV1 } from "./api/handler";
+import { createApiKeyService } from "./api/service";
 import { createTeamService } from "./team/service";
 import { buildInviteEmail, createInviteMailer } from "./team/email";
 import { newInviteToken } from "./team/token";
@@ -363,6 +365,31 @@ export const credentialService = (revalidate: (path: string) => void) => createC
     return { data, error: error ? { code: error.code } : null };
   },
   revalidate,
+});
+
+/** API keys are managed through the signed-in user's own session: the database decides who is an owner. */
+export const apiKeyService = (revalidate: (path: string) => void) => createApiKeyService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("apikeys", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
+});
+
+/** The public read-only API: no session. A key resolves to one organization and every read is scoped to it by the service-only RPCs. */
+export const apiV1 = () => createApiV1({
+  authenticate: async (hash) => {
+    const { data, error } = await createServiceClient().rpc("api_key_authenticate", { p_hash: hash });
+    if (error) throw new Error("authenticate failed");
+    return typeof data === "string" ? data : null;
+  },
+  throttle: (kind, key) => (kind === "ip" ? throttle("apiv1ip", `ip:${key}`) : throttle("apiv1", `key:${key}`)),
+  rpc: async (fn, args) => {
+    const { data, error } = await createServiceClient().rpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
 });
 
 /** Analytics are read through the signed-in user's own session: the database decides who may see an organization's numbers. */
