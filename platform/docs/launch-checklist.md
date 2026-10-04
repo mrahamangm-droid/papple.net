@@ -61,6 +61,12 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Know the limits: invitations are in-app notifications only (no email yet); only open projects can invite; one invitation per project and professional; no pool sharing, bulk invite or auto-matching.
 - [ ] Send one test invitation between two staging organizations and check the notification and the Invitations page. Owner + Claude.
 
+## Hiring analytics
+- [ ] Review the per-plan history window (`limits.analytics_days`: 30 / 90 / 365 / 365 on Enterprise; a database setting like the other `limits.*`). Owner.
+- [ ] Have an accountant look at the Money table and its definitions on `/analytics` (committed = price of accepted contracts only, paid = milestone amounts before fees and not refunded, fees = PAPple client fees, refunded = amount plus fee that went back; nothing is added across currencies). Owner.
+- [ ] Know the limits: buyer-side hiring only (no provider earnings view yet); no CSV export or emailed reports; numbers are computed live from contracts, payments and invitations, with a refund still in progress counted as paid until it completes; refunds are dated by when they were completed; months are UTC and the monthly table shows the latest 13; there are no indexes tuned for very large organizations yet.
+- [ ] Open `/analytics` for one staging organization with real contracts and check each figure against the Contracts page. Owner + Claude.
+
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
 - [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
@@ -76,7 +82,7 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Domain, DNS, HTTPS. Owner.
 
 ## Data
-- [ ] Production Supabase project; apply migrations `0001`–`0037` in order. Owner + Claude.
+- [ ] Production Supabase project; apply migrations `0001`–`0038` in order. Owner + Claude.
 - [ ] Turn on backups and point-in-time recovery. Owner.
 - [ ] Create the first admin and enrol their second factor (admin screens need aal2). Owner.
 - [ ] Resend: verify the sending domain (SPF, DKIM). Owner.

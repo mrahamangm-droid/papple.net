@@ -28,6 +28,7 @@ export const RULES = {
   team: { limit: 30, windowSec: 60 },
   credential: { limit: 30, windowSec: 60 },
   talent: { limit: 60, windowSec: 60 },
+  analytics: { limit: 30, windowSec: 60 },
 } as const satisfies Record<string, Rule>;
 
 export class RateLimitError extends Error {

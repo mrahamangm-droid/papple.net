@@ -87,6 +87,10 @@ describe("navFor", () => {
     expect(none).not.toContain("/talent");
     expect(none).not.toContain("/invitations");
   });
+  it("shows Analytics only to organization owners and admins", () => {
+    for (const role of ["viewer", "member"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).not.toContain("/analytics");
+    for (const role of ["owner", "admin"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).toContain("/analytics");
+  });
   it("shows Credentials only to organization owners and admins", () => {
     for (const role of ["viewer", "member"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).not.toContain("/settings/credentials");
     for (const role of ["owner", "admin"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).toContain("/settings/credentials");
