@@ -114,5 +114,25 @@ CID=$(q "select id from crm_contacts where org_id='$O_PRO2' and lower(email)='sa
 hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO2 "select crm_reserve_email('$O_PRO2','$CID','Race $n','Body')" & done; wait
 check "the daily email cap holds under parallel sends" "$(q "select count(*) from crm_emails where org_id='$O_PRO2'")" 3
 
+# 14. the team seat limit holds under parallel invites and under parallel accepts
+q "update platform_settings set value='{\"default\":4}' where key='limits.team_seats'"
+hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO2 "select team_create_invite('$O_PRO2','t$n@r.test','member','$(printf '%064d' $n)')" & done; wait
+check "members plus pending invites stay within the seat limit under parallel invites" "$(q "select count(*) from org_invites where org_id='$O_PRO2' and accepted_at is null and revoked_at is null")" 3
+q "insert into auth.users (id,email) select ('aaaaaa99-0000-0000-0000-0000000001' || lpad(g::text,2,'0'))::uuid, email from (select email, row_number() over (order by email) g from org_invites where org_id='$O_PRO2') x; update platform_settings set value='{\"default\":2}' where key='limits.team_seats'"
+hold; for n in 1 2 3; do h=$(q "select token_hash from org_invites where org_id='$O_PRO2' order by email offset $((n-1)) limit 1"); as aaaaaa99-0000-0000-0000-0000000001$(printf %02d $n) "select team_accept_invite('$h')" & done; wait
+check "parallel accepts never exceed the seat limit" "$(q "select count(*) from memberships where org_id='$O_PRO2'")" 2
+
+# 15. two owners cannot leave an organization without an owner or without members by acting at the same time
+O_T=cccccc99-0000-0000-0000-0000000000a1; U_T1=aaaaaa99-0000-0000-0000-0000000002a1; U_T2=aaaaaa99-0000-0000-0000-0000000002a2
+q "insert into auth.users (id,email) values ('$U_T1','o1@r.test'),('$U_T2','o2@r.test'); insert into organizations (id,type,name) values ('$O_T','agency','Race Team'); insert into memberships (user_id,org_id,role) values ('$U_T1','$O_T','owner'),('$U_T2','$O_T','owner')"
+hold; as $U_T1 "select team_set_role('$O_T','$U_T1','member')" & as $U_T2 "select team_set_role('$O_T','$U_T2','member')" & wait
+check "two owners stepping down together leave one owner" "$(q "select count(*) from memberships where org_id='$O_T' and role='owner'")" 1
+q "update memberships set role='owner' where org_id='$O_T'"
+hold; as $U_T1 "select team_remove_member('$O_T','$U_T2')" & as $U_T2 "select team_remove_member('$O_T','$U_T1')" & wait
+check "two owners removing each other leave one member" "$(q "select count(*) from memberships where org_id='$O_T'")" 1
+q "insert into memberships (user_id,org_id,role) select u,'$O_T','owner' from (select '$U_T1'::uuid u union select '$U_T2'::uuid) x on conflict (user_id,org_id) do update set role='owner'"
+hold; as $U_T1 "select team_leave('$O_T')" & as $U_T2 "select team_leave('$O_T')" & wait
+check "two owners leaving together leave one member" "$(q "select count(*) from memberships where org_id='$O_T'")" 1
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
