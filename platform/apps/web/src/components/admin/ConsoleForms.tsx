@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { dismissReportAction, reviewVerificationAction, revokeVerificationAction, saveCategoryAction, saveSkillAction, setVisibilityAction, setFlagAction, setOrgStatusAction, setPlatformRoleAction, setSettingAction, updatePlanAction } from "@/app/(app)/admin/actions";
+import { reviewCredentialAction, revokeCredentialAction, dismissReportAction, reviewVerificationAction, revokeVerificationAction, saveCategoryAction, saveSkillAction, setVisibilityAction, setFlagAction, setOrgStatusAction, setPlatformRoleAction, setSettingAction, updatePlanAction } from "@/app/(app)/admin/actions";
 import { requestVerificationAction } from "@/app/(app)/settings/verification/actions";
 import { FormError, fieldClass } from "@/components/marketplace/useAction";
 import type { ConsoleResult } from "@/lib/admin/actions";
@@ -258,6 +258,35 @@ export function TaxonomyForm({ kind, item, parents }: { kind: "category" | "skil
       <label className="block text-sm"><input type="checkbox" className="mr-2" checked={active} onChange={(e) => setActive(e.target.checked)} />Active (available for new use)</label>
       <Reason value={reason} onChange={setReason} />
       <button disabled={pending || reason.trim().length < 10} className={btn}>{id ? "Save" : `Add ${kind}`}</button>
+      <FormError error={error} /><Saved done={done} />
+    </form>
+  );
+}
+
+export function CredentialReviewForm({ credentialId, version }: { credentialId: string; version: number }) {
+  const [note, setNote] = useState("");
+  const { pending, error, done, run } = useConsole();
+  return (
+    <form className="space-y-2" onSubmit={(e) => e.preventDefault()}>
+      <label className="block text-sm">Decision note (shared with the organization; 10 to 1000 characters)
+        <textarea className={fieldClass} rows={3} value={note} onChange={(e) => setNote(e.target.value)} minLength={10} maxLength={1000} required />
+      </label>
+      <div className="flex gap-2">
+        <button disabled={pending || note.trim().length < 10} className={btn} onClick={() => run(() => reviewCredentialAction({ credentialId, version, decision: "approved", note }))}>Approve</button>
+        <button disabled={pending || note.trim().length < 10} className={btn} onClick={() => run(() => reviewCredentialAction({ credentialId, version, decision: "rejected", note }))}>Reject</button>
+      </div>
+      <FormError error={error} /><Saved done={done} />
+    </form>
+  );
+}
+
+export function CredentialRevokeForm({ credentialId }: { credentialId: string }) {
+  const [reason, setReason] = useState("");
+  const { pending, error, done, run } = useConsole();
+  return (
+    <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (window.confirm("Remove the Checked status from this credential?")) run(() => revokeCredentialAction({ credentialId, reason })); }}>
+      <Reason value={reason} onChange={setReason} />
+      <button disabled={pending || reason.trim().length < 10} className={btn}>Revoke check</button>
       <FormError error={error} /><Saved done={done} />
     </form>
   );
