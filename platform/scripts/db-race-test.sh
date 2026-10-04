@@ -154,5 +154,10 @@ q "delete from project_invitations; update platform_settings set value='null' wh
 hold; for n in 1 2 3 4 5 6; do as $U_CLIENT "select project_invite('$O_CLIENT','eeeeee99-0000-0000-0000-0000000000f9','dddddd99-0000-0000-0000-000000000001','Please send a proposal')" & done; wait
 check "parallel sends make one invitation" "$(q "select count(*) from project_invitations where org_id='$O_CLIENT'")" 1
 
+# 20. the API key limit holds under parallel creates
+q "update platform_settings set value='{\"default\":2}' where key='limits.api_keys'"
+hold; for n in 1 2 3 4 5 6; do as $U_CLIENT "select api_key_create('$O_CLIENT','Race key $n','racekey$n',repeat('$n',64))" & done; wait
+check "the API key limit holds under parallel creates" "$(q "select count(*) from api_keys where org_id='$O_CLIENT' and revoked_at is null")" 2
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
