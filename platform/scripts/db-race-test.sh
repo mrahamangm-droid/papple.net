@@ -100,5 +100,13 @@ hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO "select issue_invoice('$O_PRO','999
 check "one invoice per milestone under parallel issuing" "$(q "select count(*) from invoices where org_id='$O_PRO'")" 1
 check "the first invoice number is 000001" "$(q "select right(number,6) from invoices where org_id='$O_PRO'")" 000001
 
+# 12. the CRM contact limit holds under parallel creates, and a duplicate email is stored once
+q "update platform_settings set value='{\"default\":3}' where key='limits.crm_contacts'"
+hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO2 "select crm_save_contact('$O_PRO2',null,'Race $n',null,'race$n@x.test',null,'manual')" & done; wait
+check "the CRM contact limit holds under parallel creates" "$(q "select count(*) from crm_contacts where org_id='$O_PRO2'")" 3
+q "update platform_settings set value='{\"default\":100}' where key='limits.crm_contacts'"
+hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO2 "select crm_save_contact('$O_PRO2',null,'Same','x','same@x.test',null,'manual')" & done; wait
+check "a duplicate email is stored once under parallel creates" "$(q "select count(*) from crm_contacts where org_id='$O_PRO2' and lower(email)='same@x.test'")" 1
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }

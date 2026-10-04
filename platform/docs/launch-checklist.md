@@ -26,6 +26,11 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Have an accountant review the invoice template (`INVOICE` in `lib/invoices/present.ts`) against UAE tax invoice rules, then set `INVOICE.reviewed = true`. Until then every invoice says it has not been reviewed and is titled "Invoice", never "Tax Invoice". Owner.
 - [ ] Decide how Papple's own commission and client fee are invoiced (not built yet; provider invoices cover only the milestone price). Owner + accountant.
 
+## CRM
+- [ ] Review the per-plan contact limit (platform setting `limits.crm_contacts`: 100 / 1,000 / 10,000 / unlimited on Enterprise; like the other `limits.*` settings it is changed in the database, not in Admin → Settings). Owner.
+- [ ] Have the lawyer review the import attestation wording shown above the CSV import and the "CRM data" paragraph of the privacy policy (contacts are the organization's own data; Papple is a processor for them). Owner.
+- [ ] Email from the CRM (slice B2b) stays off behind the `crm.email` flag until the Resend domain is verified and the consent rules are reviewed. Owner.
+
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
 - [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
