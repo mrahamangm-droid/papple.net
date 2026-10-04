@@ -67,6 +67,15 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Know the limits: buyer-side hiring only (no provider earnings view yet); no CSV export or emailed reports; numbers are computed live from contracts, payments and invitations, with a refund still in progress counted as paid until it completes; refunds are dated by when they were completed; months are UTC and the monthly table shows the latest 13; there are no indexes tuned for very large organizations yet.
 - [ ] Open `/analytics` for one staging organization with real contracts and check each figure against the Contracts page. Owner + Claude.
 
+## API access
+- [ ] Review the per-plan active key limit (`limits.api_keys`: 0 / 0 / 2 / 10 for default / Professional+ / Business / Enterprise; 0 means no API access; a database setting like the other `limits.*`). Owner.
+- [ ] Decide whether admins (not only owners) may create and revoke keys. Today owners only, which is the safer default. Owner.
+- [ ] Know the limits: read-only; four endpoints (projects, proposals, contracts, analytics); keys are per organization and have no scopes, expiry or IP allow-list yet; cover letters and commission rates are never returned; rate limits are 60 requests a minute per key and 120 per caller address, counted per server instance until a shared limiter is configured.
+- [ ] Configure the shared rate limiter (Upstash) before announcing the API: without it each server instance counts on its own, so the real limits are multiplied by the number of instances. Owner + Claude.
+- [ ] Know the key rules: a key stops when the plan's `limits.api_keys` no longer covers it (0 = none, or only the newest N keys work after a downgrade), and pauses while the person who created it is not an owner (it works again if they are).
+- [ ] Publish a short public developer page (base URL, bearer header, the four endpoints, pagination, error codes) once the domain is final; the owner page shows a usage example with a placeholder domain. Owner + Claude.
+- [ ] Create a key for one staging organization and check each endpoint against the Projects, Contracts and Analytics pages. Owner + Claude.
+
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
 - [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
@@ -82,7 +91,7 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Domain, DNS, HTTPS. Owner.
 
 ## Data
-- [ ] Production Supabase project; apply migrations `0001`–`0038` in order. Owner + Claude.
+- [ ] Production Supabase project; apply migrations `0001`–`0039` in order. Owner + Claude.
 - [ ] Turn on backups and point-in-time recovery. Owner.
 - [ ] Create the first admin and enrol their second factor (admin screens need aal2). Owner.
 - [ ] Resend: verify the sending domain (SPF, DKIM). Owner.
