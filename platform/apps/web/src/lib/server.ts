@@ -29,6 +29,10 @@ import { createAiService } from "./ai/service";
 import { createAnthropicClient } from "./ai/client";
 import { createInvoiceService } from "./invoices/service";
 import { createCrmService } from "./crm/service";
+import { createCrmEmailService, EmailRefused } from "./crm/email";
+import { signUnsubscribeToken } from "./crm/unsubscribe";
+import { createUnsubscribeHandler } from "./crm/unsubscribe-handler";
+import { createResendWebhook } from "./crm/resend-webhook";
 import { createBillingService } from "./billing/service";
 import { createStripeBilling, type StripeBillingLike } from "./payments/billing-provider";
 import { formatMinor } from "./marketplace/present";
@@ -331,6 +335,75 @@ export const crmService = (revalidate: (path: string) => void) => createCrmServi
   },
   revalidate,
 });
+
+const CRM_SITE = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
+const CRM_UNSUB_SECRET = () => process.env.CRM_UNSUBSCRIBE_SECRET;
+/** Plain address from EMAIL_FROM, which may be `Name <addr>` or just `addr`. */
+const fromAddress = (from: string) => (/<([^<>\s]+@[^<>\s]+)>/.exec(from)?.[1] ?? from).trim();
+/** Display names go into a header: drop anything that could end the name or the header. */
+const displayName = (name: string) => name.replace(/[\r\n"<>,;:\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+
+/** One-to-one CRM email. Sends nothing unless the key, sender, site URL and unsubscribe secret all exist; the database has the final say on who may be emailed. */
+export const crmEmailService = (revalidate: (path: string) => void) => createCrmEmailService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("crmemail", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  isConfigured: () => !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM && CRM_SITE() && (CRM_UNSUB_SECRET()?.length ?? 0) >= 16),
+  unsubscribeUrl: (orgId, email) => `${CRM_SITE()}/crm-unsubscribe?t=${signUnsubscribeToken(CRM_UNSUB_SECRET() ?? "", orgId, email)}`,
+  replyTo: async (userId) => (await createServiceClient().auth.admin.getUserById(userId)).data.user?.email ?? null,
+  send: async ({ to, subject, text, replyTo, fromName, unsubscribeUrl, idempotencyKey }) => {
+    const key = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM;
+    if (!key || !from) throw new Error("email not configured");
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      signal: AbortSignal.timeout(15_000),
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({
+        from: `${displayName(fromName)} via PAPple <${fromAddress(from)}>`, to, subject, text,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+      }),
+    });
+    // A 4xx other than 429 or 408 means the provider looked at the message and said no. Anything else (5xx, a timeout, a dropped connection) leaves the outcome unknown.
+    if (res.status >= 400 && res.status < 500 && ![408, 409].includes(res.status)) throw new EmailRefused(`email provider ${res.status}`);
+    if (!res.ok) throw new Error(`email provider ${res.status}`);
+    const body = (await res.json().catch(() => null)) as { id?: unknown } | null;
+    return typeof body?.id === "string" && body.id !== "" ? body.id : null;
+  },
+  mark: async (id, status, provider) => {
+    const { error } = await createServiceClient().rpc("crm_mark_email", { p_id: id, p_status: status, p_provider: provider });
+    if (error) throw new Error("could not record the outcome");
+  },
+  revalidate,
+});
+
+/** Public unsubscribe page: the signed token in the link is the only authority. */
+export const crmUnsubscribe = async () => {
+  const ip = await clientIp();
+  return createUnsubscribeHandler({
+    secret: CRM_UNSUB_SECRET(),
+    throttle: () => throttle("unsubscribe", `ip:${ip}`),
+    suppress: async (orgId, email) => {
+      const { error } = await createServiceClient().rpc("crm_add_suppression", { p_org: orgId, p_email: email, p_reason: "unsubscribe" });
+      if (error) throw new Error("suppression failed");
+    },
+  });
+};
+
+/** Resend calls this directly; authenticity comes only from the Svix signature over the raw body. */
+export const handleResendWebhook = (raw: string, headers: { id: string | null; timestamp: string | null; signature: string | null }) =>
+  createResendWebhook({
+    secret: process.env.RESEND_WEBHOOK_SECRET,
+    suppress: async (providerId, reason) => {
+      const { data, error } = await createServiceClient().rpc("crm_suppress_by_provider_id", { p_provider: providerId, p_reason: reason });
+      if (error) throw new Error("suppression failed");
+      return data === true;
+    },
+  }).handle(raw, headers);
 
 /** Invoices run through the signed-in user's own session: the database decides who may issue. */
 export const invoiceService = (revalidate: (path: string) => void) => createInvoiceService({
