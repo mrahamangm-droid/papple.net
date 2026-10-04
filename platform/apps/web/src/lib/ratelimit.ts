@@ -25,6 +25,7 @@ export const RULES = {
   crm: { limit: 60, windowSec: 60 },
   crmemail: { limit: 10, windowSec: 60 },
   unsubscribe: { limit: 20, windowSec: 60 },
+  team: { limit: 30, windowSec: 60 },
 } as const satisfies Record<string, Rule>;
 
 export class RateLimitError extends Error {

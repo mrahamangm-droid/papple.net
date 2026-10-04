@@ -33,6 +33,9 @@ import { createCrmEmailService, EmailRefused } from "./crm/email";
 import { signUnsubscribeToken } from "./crm/unsubscribe";
 import { createUnsubscribeHandler } from "./crm/unsubscribe-handler";
 import { createResendWebhook } from "./crm/resend-webhook";
+import { createTeamService } from "./team/service";
+import { buildInviteEmail, createInviteMailer } from "./team/email";
+import { newInviteToken } from "./team/token";
 import { createBillingService } from "./billing/service";
 import { createStripeBilling, type StripeBillingLike } from "./payments/billing-provider";
 import { formatMinor } from "./marketplace/present";
@@ -342,6 +345,37 @@ const CRM_UNSUB_SECRET = () => process.env.CRM_UNSUBSCRIBE_SECRET;
 const fromAddress = (from: string) => (/<([^<>\s]+@[^<>\s]+)>/.exec(from)?.[1] ?? from).trim();
 /** Display names go into a header: drop anything that could end the name or the header. */
 const displayName = (name: string) => name.replace(/[\r\n"<>,;:\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+
+/** Team management runs through the signed-in user's own session: the database decides who may invite, change roles or remove. */
+export const teamService = (revalidate: (path: string) => void) => createTeamService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("team", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
+  siteUrl: () => CRM_SITE(),
+  newToken: newInviteToken,
+  emailInvite: async ({ orgId, userId, to, role, link, inviteId }) => {
+    const key = process.env.RESEND_API_KEY, from = process.env.EMAIL_FROM;
+    const admin = createServiceClient();
+    const { data: flag } = await admin.from("feature_flags").select("enabled").eq("key", "team.email_invites").maybeSingle();
+    if (!flag?.enabled || !key || !from) return "off";
+    const [{ data: org }, { data: prof }, { data: u }] = await Promise.all([
+      admin.from("organizations").select("name").eq("id", orgId).maybeSingle(),
+      admin.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
+      admin.auth.admin.getUserById(userId),
+    ]);
+    const m = buildInviteEmail({ orgName: (org?.name as string | undefined) ?? "", inviterName: (prof?.display_name as string | null) ?? u.user?.email ?? "", role, link });
+    try {
+      await createInviteMailer({ apiKey: key, from: `PAPple <${fromAddress(from)}>` })({ to, subject: m.subject, text: m.text, idempotencyKey: `team-invite-${inviteId}` });
+      return "sent";
+    } catch {
+      return "failed";
+    }
+  },
+});
 
 /** One-to-one CRM email. Sends nothing unless the key, sender, site URL and unsubscribe secret all exist; the database has the final say on who may be emailed. */
 export const crmEmailService = (revalidate: (path: string) => void) => createCrmEmailService({
