@@ -108,5 +108,11 @@ q "update platform_settings set value='{\"default\":100}' where key='limits.crm_
 hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO2 "select crm_save_contact('$O_PRO2',null,'Same','x','same@x.test',null,'manual')" & done; wait
 check "a duplicate email is stored once under parallel creates" "$(q "select count(*) from crm_contacts where org_id='$O_PRO2' and lower(email)='same@x.test'")" 1
 
+# 13. the CRM daily email cap holds under parallel sends
+q "update feature_flags set enabled=true where key='crm.email'; update platform_settings set value='{\"default\":3}' where key='limits.crm_emails_per_day'; insert into billing_profiles (org_id, legal_name, address, country) values ('$O_PRO2','Race Two LLC','Office 2, Dubai','AE'); update crm_contacts set basis='opted_in' where org_id='$O_PRO2' and lower(email)='same@x.test'"
+CID=$(q "select id from crm_contacts where org_id='$O_PRO2' and lower(email)='same@x.test'")
+hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO2 "select crm_reserve_email('$O_PRO2','$CID','Race $n','Body')" & done; wait
+check "the daily email cap holds under parallel sends" "$(q "select count(*) from crm_emails where org_id='$O_PRO2'")" 3
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
