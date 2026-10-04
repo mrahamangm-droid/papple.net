@@ -29,6 +29,9 @@ export const RULES = {
   credential: { limit: 30, windowSec: 60 },
   talent: { limit: 60, windowSec: 60 },
   analytics: { limit: 30, windowSec: 60 },
+  apikeys: { limit: 20, windowSec: 60 },
+  apiv1: { limit: 60, windowSec: 60 },
+  apiv1ip: { limit: 120, windowSec: 60 },
 } as const satisfies Record<string, Rule>;
 
 export class RateLimitError extends Error {
