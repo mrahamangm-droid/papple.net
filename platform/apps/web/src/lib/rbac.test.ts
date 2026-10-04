@@ -77,6 +77,10 @@ describe("navFor", () => {
     for (const role of ["viewer", "member", "admin", "owner"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).toContain("/settings/team");
     expect(navFor(ctx({ memberships: [] })).map((i) => i.href)).not.toContain("/settings/team");
   });
+  it("shows Credentials only to organization owners and admins", () => {
+    for (const role of ["viewer", "member"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).not.toContain("/settings/credentials");
+    for (const role of ["owner", "admin"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).toContain("/settings/credentials");
+  });
   it("shows Invoicing only to organization owners and admins", () => {
     for (const role of ["viewer", "member"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).not.toContain("/settings/invoicing");
     for (const role of ["owner", "admin"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).toContain("/settings/invoicing");
