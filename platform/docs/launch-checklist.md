@@ -54,6 +54,13 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Know the limits: evidence is a link (no file upload yet); no automatic registry checks; no expiry reminder emails; checked credentials past their expiry show as Expired automatically.
 - [ ] Review one real check end to end in staging: add a credential with a link, request a check, approve it as an admin, see the badge on the public profile, edit it and see it return to self-declared. Owner + Claude.
 
+## Talent pools
+- [ ] Review the per-plan limits (database settings like the other `limits.*`): `limits.talent_pools` (1 / 3 / 10 / unlimited), `limits.pool_members` per pool (25 / 100 / 500 / unlimited) and `limits.project_invites_per_day` (5 / 25 / 100 / unlimited, rolling 24 hours, per organization). Owner.
+- [ ] Have the lawyer review the privacy policy wording for pools: an organization keeps private notes and tags about professionals who have a public profile; the professional cannot see them or opt out except by making their profile private. Owner.
+- [ ] Decide whether professionals should be told they were added to a pool (today they are not; they only see invitations). Owner.
+- [ ] Know the limits: invitations are in-app notifications only (no email yet); only open projects can invite; one invitation per project and professional; no pool sharing, bulk invite or auto-matching.
+- [ ] Send one test invitation between two staging organizations and check the notification and the Invitations page. Owner + Claude.
+
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
 - [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
@@ -69,7 +76,7 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Domain, DNS, HTTPS. Owner.
 
 ## Data
-- [ ] Production Supabase project; apply migrations `0001`–`0036` in order. Owner + Claude.
+- [ ] Production Supabase project; apply migrations `0001`–`0037` in order. Owner + Claude.
 - [ ] Turn on backups and point-in-time recovery. Owner.
 - [ ] Create the first admin and enrol their second factor (admin screens need aal2). Owner.
 - [ ] Resend: verify the sending domain (SPF, DKIM). Owner.
