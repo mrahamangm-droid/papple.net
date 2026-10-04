@@ -35,6 +35,7 @@ import { createUnsubscribeHandler } from "./crm/unsubscribe-handler";
 import { createResendWebhook } from "./crm/resend-webhook";
 import { createCredentialService } from "./credentials/service";
 import { createTalentService } from "./talent/service";
+import { createAnalyticsService } from "./analytics/service";
 import { createTeamService } from "./team/service";
 import { buildInviteEmail, createInviteMailer } from "./team/email";
 import { newInviteToken } from "./team/token";
@@ -362,6 +363,16 @@ export const credentialService = (revalidate: (path: string) => void) => createC
     return { data, error: error ? { code: error.code } : null };
   },
   revalidate,
+});
+
+/** Analytics are read through the signed-in user's own session: the database decides who may see an organization's numbers. */
+export const analyticsService = () => createAnalyticsService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("analytics", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
 });
 
 /** Talent pools and invitations run through the signed-in user's own session: the database decides who may add, invite or decline. */
