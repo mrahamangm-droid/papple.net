@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { crmFailureMessage, describeImport, formatDealValue, stageLabel } from "./present";
+import { basisLabel, crmFailureMessage, describeImport, emailFailureMessage, formatDealValue, stageLabel } from "./present";
 
 describe("crm present", () => {
   it("labels stages and never throws on unknown ones", () => {
@@ -27,5 +27,20 @@ describe("crm present", () => {
     const s = describeImport({ imported: 0, duplicate: 0, invalidLines: Array.from({ length: 30 }, (_, i) => i + 2), limit: 0 });
     expect(s).toContain("30 skipped");
     expect(s).toContain("…");
+  });
+  it("has a fixed, honest message for every email failure and never echoes server text", () => {
+    expect(emailFailureMessage("suppressed")).toMatch(/unsubscribed|asked not to|bounced/i);
+    expect(emailFailureMessage("limit")).toMatch(/today/i);
+    expect(emailFailureMessage("notready")).toMatch(/billing details|basis|not available/i);
+    expect(emailFailureMessage("send_failed")).toMatch(/not sent/i);
+    expect(emailFailureMessage("unconfirmed")).toMatch(/could not confirm/i);
+    expect(emailFailureMessage("unconfirmed")).toMatch(/counts/i);
+    expect(emailFailureMessage("nope" as never)).toBe(emailFailureMessage("error"));
+  });
+  it("labels the basis for emailing", () => {
+    expect(basisLabel("existing_client")).toBe("Existing client");
+    expect(basisLabel("opted_in")).toBe("Asked to receive email");
+    expect(basisLabel("requested_contact")).toBe("Asked me to contact them");
+    expect(basisLabel(null)).toBe("Not recorded");
   });
 });

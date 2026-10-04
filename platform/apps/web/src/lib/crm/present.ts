@@ -39,3 +39,21 @@ export function describeImport(r: ImportReport): string {
   }
   return parts.join("; ") + ".";
 }
+
+import type { EmailFailure } from "./email";
+
+const EMAIL_MESSAGES: Record<EmailFailure, string> = {
+  forbidden: "You do not have permission to email this contact.",
+  invalid: "Check the subject and message. The subject must be one line and neither field can be empty.",
+  notready: "Email is not available for this contact yet. Record why you may email them, save your billing details (they appear in the footer), and make sure email is switched on for your account.",
+  suppressed: "This address has unsubscribed, bounced or complained, so you cannot email it again.",
+  limit: "You have reached today's email limit for your plan. Try again tomorrow or upgrade your plan.",
+  rate: "You are going a little fast. Wait a moment and try again.",
+  send_failed: "The message was not sent because the email provider refused it. Nothing was counted against your daily limit.",
+  unconfirmed: "We could not confirm whether the message was sent. It may have been delivered, so check with the contact before sending it again. It counts toward today's limit.",
+  error: "Something went wrong. Please try again.",
+};
+export const emailFailureMessage = (code: EmailFailure): string => EMAIL_MESSAGES[code] ?? EMAIL_MESSAGES.error;
+
+const BASIS_LABEL: Record<string, string> = { existing_client: "Existing client", opted_in: "Asked to receive email", requested_contact: "Asked me to contact them" };
+export const basisLabel = (b: string | null): string => (b ? BASIS_LABEL[b] ?? "Not recorded" : "Not recorded");
