@@ -29,7 +29,14 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 ## CRM
 - [ ] Review the per-plan contact limit (platform setting `limits.crm_contacts`: 100 / 1,000 / 10,000 / unlimited on Enterprise; like the other `limits.*` settings it is changed in the database, not in Admin → Settings). Owner.
 - [ ] Have the lawyer review the import attestation wording shown above the CSV import and the "CRM data" paragraph of the privacy policy (contacts are the organization's own data; Papple is a processor for them). Owner.
-- [ ] Email from the CRM (slice B2b) stays off behind the `crm.email` flag until the Resend domain is verified and the consent rules are reviewed. Owner.
+- [ ] CRM email stays off (feature flag `crm.email`, default off) until every item below is done. Owner.
+  - [ ] Verify the sending domain in Resend (SPF, DKIM, DMARC) and set `EMAIL_FROM` to an address on it. Messages show the organization's legal name followed by "via PAPple" in front of that address.
+  - [ ] Set `CRM_UNSUBSCRIBE_SECRET` (at least 16 random characters, kept secret; rotating it invalidates unsubscribe links already sent) and `NEXT_PUBLIC_SITE_URL`. Without them nothing is sent.
+  - [ ] In Resend add a webhook to `https://papple.net/api/webhooks/resend` for `email.bounced` and `email.complained`, and put its signing secret in `RESEND_WEBHOOK_SECRET`. Until then bounces and spam complaints are not recorded automatically.
+  - [ ] Know the limits of the log: a message whose delivery could not be confirmed is shown as `unknown` and counts toward the cap; a message stuck as `queued` (server crash mid-send) is not cleaned up automatically yet. Owner.
+  - [ ] Review the daily cap `limits.crm_emails_per_day` (10 / 50 / 200 / 1,000 by plan; a database setting like the other `limits.*`).
+  - [ ] Have the lawyer review the email footer wording (`buildEmailText` in `lib/crm/email.ts`) and the consent basis options against UAE and any recipient-country rules. Papple records the sender's stated basis; it cannot verify it.
+  - [ ] Send one test message to your own address and check the footer, the Reply-To, the unsubscribe confirmation page and that a second send is refused after unsubscribing. Owner + Claude.
 
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.

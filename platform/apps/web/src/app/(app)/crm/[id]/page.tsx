@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { AddDealForm, AddNoteForm, CompleteNoteButton, DealStageSelect, DeleteContactButton } from "@/components/crm/CrmForms";
 import { requireCapability } from "@/lib/auth-context";
-import { formatDealValue } from "@/lib/crm/present";
+import { BasisForm, SendEmailForm } from "@/components/crm/CrmEmailForms";
+import { basisLabel, formatDealValue } from "@/lib/crm/present";
+import { settings } from "@/lib/server";
 import { isValidUuid } from "@/lib/marketplace/validators";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -18,15 +20,19 @@ export default async function ContactPage({ params }: PageProps<"/crm/[id]">) {
   const { id } = await params;
   if (!isValidUuid(id)) notFound();
   const db = await createServerSupabase();
-  const { data: c } = await db.from("crm_contacts").select("id, org_id, name, company, email, phone, source, created_at").eq("id", id).maybeSingle();
+  const { data: c } = await db.from("crm_contacts").select("id, org_id, name, company, email, phone, source, basis, created_at").eq("id", id).maybeSingle();
   if (!c) notFound();
   const orgId = c.org_id as string;
   const role = ctx.memberships.find((m) => m.orgId === orgId)?.role;
   // Platform admins can read every row through RLS; the screen is for the organization's own members only.
   if (!role) notFound();
-  const [{ data: deals }, { data: notes }] = await Promise.all([
+  const [{ data: deals }, { data: notes }, { data: mails }, { data: suppressed }, emailOn, { data: profile }] = await Promise.all([
     db.from("crm_deals").select("id, title, stage, value, currency, expected_close").eq("contact_id", id).order("created_at", { ascending: false }),
     db.from("crm_notes").select("id, body, follow_up_at, done_at, created_at").eq("contact_id", id).order("created_at", { ascending: false }),
+    db.from("crm_emails").select("id, subject, status, created_at").eq("contact_id", id).order("created_at", { ascending: false }).limit(20),
+    c.email ? db.from("crm_suppressions").select("reason").eq("org_id", orgId).eq("email", (c.email as string).toLowerCase()).maybeSingle() : Promise.resolve({ data: null }),
+    settings.isFlagEnabled("crm.email", orgId).catch(() => false),
+    db.from("billing_profiles").select("org_id").eq("org_id", orgId).maybeSingle(),
   ]);
   const canWrite = !!role && WRITERS.includes(role);
   const canDelete = role === "owner" || role === "admin";
@@ -69,6 +75,27 @@ export default async function ContactPage({ params }: PageProps<"/crm/[id]">) {
         {(notes ?? []).length === 0 && <li className="text-sm">No notes yet.</li>}
       </ul>
       {canWrite && <AddNoteForm orgId={orgId} contactId={id} />}
+
+      <h2 className="mt-8 text-lg font-semibold">Email</h2>
+      {!emailOn ? (
+        <p className="mt-2 text-sm">Email from the CRM is not switched on for your account yet.</p>
+      ) : !c.email ? (
+        <p className="mt-2 text-sm">Add an email address to this contact to send them a message.</p>
+      ) : suppressed ? (
+        <p className="mt-2 text-sm">This address has {suppressed.reason === "unsubscribe" ? "unsubscribed" : suppressed.reason === "bounce" ? "bounced" : "marked a message as spam"}, so it cannot be emailed again.</p>
+      ) : (
+        <>
+          <p className="mt-2 text-sm">Reason recorded: {basisLabel((c.basis as string | null) ?? null)}</p>
+          {canWrite && <BasisForm orgId={orgId} contactId={id} basis={(c.basis as string | null) ?? null} />}
+          {canWrite && c.basis && !profile && <p className="mt-2 text-sm">Save your <Link className="underline" href="/settings/invoicing">billing details</Link> first: your legal name and address go in the email footer.</p>}
+          {canWrite && c.basis && profile && <SendEmailForm orgId={orgId} contactId={id} to={c.email as string} />}
+        </>
+      )}
+      <ul className="mt-4 space-y-1 text-sm">
+        {(mails ?? []).map((m) => (
+          <li key={m.id as string}>{m.subject as string} <span className="opacity-70">· {m.status as string} · {day(m.created_at as string)}</span></li>
+        ))}
+      </ul>
 
       {canDelete && <div className="mt-10"><DeleteContactButton orgId={orgId} id={id} /></div>}
     </AppShell>
