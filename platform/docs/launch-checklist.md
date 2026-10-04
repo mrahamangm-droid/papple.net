@@ -47,6 +47,13 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Know the limits: there is no activity log of who invited or removed whom (planned for a later slice); a member who is removed keeps nothing, but work they created stays with the organization.
 - [ ] Run one real invite end to end in staging: invite a second address, sign in as it, accept, change the role, remove. Owner + Claude.
 
+## PGAN credentials
+- [ ] Have the lawyer review the public wording (`CHECKED_COPY` in `lib/credentials/present.ts`): "Checked by PAPple" means a reviewer looked at the evidence supplied, not that Papple certifies the credential, the issuer or the person. Owner.
+- [ ] Decide who reviews credential checks and how (Admin → Credential checks; needs an admin with a second factor). Agree what counts as acceptable evidence per type (licence, degree, certification) so reviews are consistent. Owner.
+- [ ] Review the per-plan credential limit (`limits.credentials`: 10 / 30 / 100 / unlimited on Enterprise; a database setting like the other `limits.*`). Owner.
+- [ ] Know the limits: evidence is a link (no file upload yet); no automatic registry checks; no expiry reminder emails; checked credentials past their expiry show as Expired automatically.
+- [ ] Review one real check end to end in staging: add a credential with a link, request a check, approve it as an admin, see the badge on the public profile, edit it and see it return to self-declared. Owner + Claude.
+
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
 - [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
@@ -62,7 +69,7 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Domain, DNS, HTTPS. Owner.
 
 ## Data
-- [ ] Production Supabase project; apply migrations `0001`–`0035` in order. Owner + Claude.
+- [ ] Production Supabase project; apply migrations `0001`–`0036` in order. Owner + Claude.
 - [ ] Turn on backups and point-in-time recovery. Owner.
 - [ ] Create the first admin and enrol their second factor (admin screens need aal2). Owner.
 - [ ] Resend: verify the sending domain (SPF, DKIM). Owner.
