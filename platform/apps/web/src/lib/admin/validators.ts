@@ -44,6 +44,8 @@ export const verificationRequestInput = z.object({
   url: z.string().trim().max(500).regex(/^https:\/\//).optional().or(z.literal("")),
 });
 export const verificationReviewInput = z.object({ requestId: z.uuid(), decision: z.enum(["approved", "rejected"]), note: reason });
+export const credentialReviewInput = z.object({ credentialId: z.uuid(), version: z.number().int().min(1), decision: z.enum(["approved", "rejected"]), note: reason });
+export const credentialRevokeInput = z.object({ credentialId: z.uuid(), reason });
 export const revokeVerificationInput = z.object({ orgId: z.uuid(), reason });
 
 export const AUDIT_PAGE_SIZE = 50;

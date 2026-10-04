@@ -18,6 +18,9 @@ export function createAdminConsoleDb(rpc: Rpc) {
     requestVerification: (i: { orgId: string; note: string; url?: string }) => call("request_verification", { p_org: i.orgId, p_note: i.note, p_url: i.url || null }),
     reviewVerification: (i: { requestId: string; decision: "approved" | "rejected"; note: string }) =>
       call("review_verification", { p_request: i.requestId, p_decision: i.decision, p_note: i.note }),
+    reviewCredential: (i: { credentialId: string; version: number; decision: "approved" | "rejected"; note: string }) =>
+      call("credential_review", { p_id: i.credentialId, p_version: i.version, p_decision: i.decision, p_note: i.note }),
+    revokeCredential: (i: { credentialId: string; reason: string }) => call("credential_revoke", { p_id: i.credentialId, p_reason: i.reason }),
     setVisibility: (i: { kind: "profile" | "service" | "project"; id: string; hidden: boolean; reason: string }) =>
       call("admin_set_visibility", { p_kind: i.kind, p_id: i.id, p_hidden: i.hidden, p_reason: i.reason }),
     dismissReport: (i: { reportId: string; reason: string }) => call("dismiss_report", { p_report: i.reportId, p_reason: i.reason }),
