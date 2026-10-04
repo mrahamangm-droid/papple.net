@@ -139,5 +139,20 @@ q "update platform_settings set value='{\"default\":3}' where key='limits.creden
 hold; for n in 1 2 3 4 5 6 7 8; do as $U_PRO "select credential_save('$O_PRO',null,'award','Race award $n','Race body',null,null,null,null)" & done; wait
 check "the credential limit holds under parallel saves" "$(q "select count(*) from provider_credentials where org_id='$O_PRO'")" 3
 
+# 17. the pool member limit holds under parallel adds
+q "insert into projects (id,org_id,title,description,currency,status) values ('eeeeee99-0000-0000-0000-0000000000f9','$O_CLIENT','Invite race','Detailed description','USD','open'); insert into talent_pools (id,org_id,name) values ('99999999-0000-0000-0000-0000000000b1','$O_CLIENT','Race pool'); update platform_settings set value='{\"default\":1}' where key='limits.pool_members'"
+hold; for n in 1 2 3 4; do as $U_CLIENT "select pool_set_member('$O_CLIENT','99999999-0000-0000-0000-0000000000b1','dddddd99-0000-0000-0000-00000000000$(( (n % 2) + 1 ))',null,'{}')" & done; wait
+check "the pool member limit holds under parallel adds" "$(q "select count(*) from talent_pool_members where pool_id='99999999-0000-0000-0000-0000000000b1'")" 1
+
+# 18. the daily invitation cap holds under parallel invites (different professionals)
+q "delete from talent_pool_members; insert into talent_pool_members (pool_id,profile_id,org_id) values ('99999999-0000-0000-0000-0000000000b1','dddddd99-0000-0000-0000-000000000001','$O_CLIENT'),('99999999-0000-0000-0000-0000000000b1','dddddd99-0000-0000-0000-000000000002','$O_CLIENT'); update platform_settings set value='{\"default\":1}' where key='limits.project_invites_per_day'"
+hold; for n in 1 2 3 4; do as $U_CLIENT "select project_invite('$O_CLIENT','eeeeee99-0000-0000-0000-0000000000f9','dddddd99-0000-0000-0000-00000000000$(( (n % 2) + 1 ))','Please send a proposal')" & done; wait
+check "the daily invitation cap holds under parallel invites" "$(q "select count(*) from project_invitations where org_id='$O_CLIENT'")" 1
+
+# 19. one invitation per project and professional under parallel sends
+q "delete from project_invitations; update platform_settings set value='null' where key='limits.project_invites_per_day'"
+hold; for n in 1 2 3 4 5 6; do as $U_CLIENT "select project_invite('$O_CLIENT','eeeeee99-0000-0000-0000-0000000000f9','dddddd99-0000-0000-0000-000000000001','Please send a proposal')" & done; wait
+check "parallel sends make one invitation" "$(q "select count(*) from project_invitations where org_id='$O_CLIENT'")" 1
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
