@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/contracts", "/contracts/11111111-1111-4111-8111-111111111111", "/settings/payouts", "/settings/verification", "/settings/billing", "/settings/invoicing", "/crm", "/crm/33333333-3333-4333-8333-333333333333", "/settings/team", "/invite/" + "a".repeat(43), "/invite/short","/contracts/11111111-1111-4111-8111-111111111111/invoices/22222222-2222-4222-8222-222222222222"]) {
+for (const path of ["/contracts", "/contracts/11111111-1111-4111-8111-111111111111", "/settings/payouts", "/settings/verification", "/settings/billing", "/settings/invoicing", "/crm", "/crm/33333333-3333-4333-8333-333333333333", "/settings/team", "/settings/credentials", "/invite/" + "a".repeat(43), "/invite/short","/contracts/11111111-1111-4111-8111-111111111111/invoices/22222222-2222-4222-8222-222222222222"]) {
   test(`signed-in area ${path} redirects to /signin`, async ({ request }) => {
     const res = await request.get(path, { maxRedirects: 0 });
     expect(res.status()).toBe(307);
@@ -49,7 +49,7 @@ test("the webhook only accepts POST", async ({ request }) => {
   expect(res.status()).toBe(405);
 });
 
-for (const path of ["/admin/disputes", "/admin/disputes/11111111-1111-4111-8111-111111111111", "/admin/settings", "/admin/plans", "/admin/audit", "/admin/organizations", "/admin/staff", "/admin/verification", "/admin/reports", "/admin/reports/hidden", "/admin/taxonomy"]) {
+for (const path of ["/admin/disputes", "/admin/disputes/11111111-1111-4111-8111-111111111111", "/admin/settings", "/admin/plans", "/admin/audit", "/admin/organizations", "/admin/staff", "/admin/verification", "/admin/credentials", "/admin/reports", "/admin/reports/hidden", "/admin/taxonomy"]) {
   test(`admin area ${path} redirects to /signin`, async ({ request }) => {
     const res = await request.get(path, { maxRedirects: 0 });
     expect(res.status()).toBe(307);
