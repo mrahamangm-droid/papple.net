@@ -28,6 +28,7 @@ import { createDbWebhookStore } from "./webhooks";
 import { createAiService } from "./ai/service";
 import { createAnthropicClient } from "./ai/client";
 import { createInvoiceService } from "./invoices/service";
+import { createCrmService } from "./crm/service";
 import { createBillingService } from "./billing/service";
 import { createStripeBilling, type StripeBillingLike } from "./payments/billing-provider";
 import { formatMinor } from "./marketplace/present";
@@ -318,6 +319,17 @@ export const billingService = createBillingService({
   },
   get billing() { return billingProvider(); },
   siteUrl: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://papple.net").replace(/\/$/, ""),
+});
+
+/** CRM writes run through the signed-in user's own session: the database decides who may write. */
+export const crmService = (revalidate: (path: string) => void) => createCrmService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("crm", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
 });
 
 /** Invoices run through the signed-in user's own session: the database decides who may issue. */

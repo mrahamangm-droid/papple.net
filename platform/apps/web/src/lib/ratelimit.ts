@@ -22,6 +22,7 @@ export const RULES = {
   ai: { limit: 10, windowSec: 60 },
   billing: { limit: 10, windowSec: 60 },
   invoice: { limit: 20, windowSec: 60 },
+  crm: { limit: 60, windowSec: 60 },
 } as const satisfies Record<string, Rule>;
 
 export class RateLimitError extends Error {

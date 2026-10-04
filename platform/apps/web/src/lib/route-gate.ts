@@ -1,5 +1,5 @@
 /** Optimistic gate for signed-out visitors. Pages and actions still re-check on the server. */
-export const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/onboarding", "/settings", "/projects", "/contracts", "/messages", "/notifications", "/profile"] as const;
+export const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/onboarding", "/settings", "/projects", "/contracts", "/crm", "/messages", "/notifications", "/profile"] as const;
 /** Exact only: `/services` is the provider's manager, while `/services/<slug>` is a public page. */
 export const PROTECTED_EXACT = ["/services"] as const;
 
