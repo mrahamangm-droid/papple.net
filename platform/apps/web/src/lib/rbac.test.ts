@@ -77,6 +77,16 @@ describe("navFor", () => {
     for (const role of ["viewer", "member", "admin", "owner"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).toContain("/settings/team");
     expect(navFor(ctx({ memberships: [] })).map((i) => i.href)).not.toContain("/settings/team");
   });
+  it("shows Talent and Invitations to every organization member and to nobody without a membership", () => {
+    for (const role of ["viewer", "member", "admin", "owner"] as const) {
+      const hrefs = navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href);
+      expect(hrefs).toContain("/talent");
+      expect(hrefs).toContain("/invitations");
+    }
+    const none = navFor(ctx({ memberships: [] })).map((i) => i.href);
+    expect(none).not.toContain("/talent");
+    expect(none).not.toContain("/invitations");
+  });
   it("shows Credentials only to organization owners and admins", () => {
     for (const role of ["viewer", "member"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).not.toContain("/settings/credentials");
     for (const role of ["owner", "admin"] as const) expect(navFor(ctx({ memberships: [{ orgId: "o1", role }] })).map((i) => i.href)).toContain("/settings/credentials");
