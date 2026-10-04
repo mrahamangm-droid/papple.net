@@ -104,3 +104,10 @@ describe("hardening rules", () => {
     expect(RULES.ai).toEqual({ limit: 10, windowSec: 60 });
   });
 });
+
+describe("team rule", () => {
+  it("exists and is generous enough for ordinary team management but bounded", async () => {
+    const { RULES } = await import("./ratelimit");
+    expect(RULES.team).toEqual({ limit: 30, windowSec: 60 });
+  });
+});

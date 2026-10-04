@@ -38,6 +38,15 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
   - [ ] Have the lawyer review the email footer wording (`buildEmailText` in `lib/crm/email.ts`) and the consent basis options against UAE and any recipient-country rules. Papple records the sender's stated basis; it cannot verify it.
   - [ ] Send one test message to your own address and check the footer, the Reply-To, the unsubscribe confirmation page and that a second send is refused after unsubscribing. Owner + Claude.
 
+## Team workspace
+- [ ] Review the per-plan seat limit (platform setting `limits.team_seats`: 1 / 5 / 25 / unlimited on Enterprise; members plus pending invites; a database setting like the other `limits.*`) and the daily invite cap `limits.team_invites_per_day` (20). Organizations already over a limit keep their members but cannot add more. Owner.
+- [ ] Email invitations are off (feature flag `team.email_invites`, default off). The invite link always works, so the flag is optional. To enable it: set `RESEND_API_KEY` and `EMAIL_FROM` (verified Resend domain, same as CRM email) and `NEXT_PUBLIC_SITE_URL`, then turn the flag on in Admin → Settings. Send a test invite to your own address and check the wording. Owner + Claude.
+- [ ] Release gate: in the hosted Supabase project turn "Confirm email" ON and "Secure email change" ON, and enable only sign-in providers that report verified emails. Invitations trust the confirmed address, so with confirmation off anyone could sign up as the invited address and join. Owner.
+- [ ] `NEXT_PUBLIC_SITE_URL` is required for invite links; without it nobody can be invited.
+- [ ] Have the lawyer glance at the invitation email wording (`buildInviteEmail` in `lib/team/email.ts`) and the privacy policy: team members can see each other's sign-in email addresses. Owner.
+- [ ] Know the limits: there is no activity log of who invited or removed whom (planned for a later slice); a member who is removed keeps nothing, but work they created stays with the organization.
+- [ ] Run one real invite end to end in staging: invite a second address, sign in as it, accept, change the role, remove. Owner + Claude.
+
 ## AI assistant (optional)
 - [ ] Create an Anthropic API key and paste `ANTHROPIC_API_KEY` into the app environment yourself; optionally set `AI_MODEL`. Owner.
 - [ ] Set a spending limit in the Anthropic console as a second safety net. Owner.
@@ -53,7 +62,7 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Domain, DNS, HTTPS. Owner.
 
 ## Data
-- [ ] Production Supabase project; apply migrations `0001`–`0028` in order. Owner + Claude.
+- [ ] Production Supabase project; apply migrations `0001`–`0035` in order. Owner + Claude.
 - [ ] Turn on backups and point-in-time recovery. Owner.
 - [ ] Create the first admin and enrol their second factor (admin screens need aal2). Owner.
 - [ ] Resend: verify the sending domain (SPF, DKIM). Owner.
