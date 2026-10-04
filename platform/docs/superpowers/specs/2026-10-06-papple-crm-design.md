@@ -26,3 +26,14 @@ Email (B2b), custom fields, tags, merge, export, activity timeline across module
 
 ## Review focus
 Cross-organization reads or writes (contact ids from another org); viewer writing; duplicate email races on import and create; the limit under parallel imports; CSV edge cases (quotes, embedded newlines, BOM, formula injection `=cmd|...` in exports/echo, huge cells, wrong delimiter, header-only file); attestation missing; deleting a contact with deals and notes; a note or deal pointing at a contact of another organization.
+
+## B2b decisions (email), 2026-10-06
+Built on the rules above; these settle what they left open.
+- **Enforcement in the database.** `crm_reserve_email` checks everything (flag, writer role, contact in the organization, address present, recorded basis, billing profile, suppression, daily cap) and inserts a `queued` row; the app sends only what the database reserved. `crm_mark_email` records `sent` or `failed` once, by the sender. Failed sends do not count toward the daily cap.
+- **Flag and cap.** Flag `crm.email` (org override, then global; default off). Cap setting `limits.crm_emails_per_day` (default 10, professional_plus 50, business 200, enterprise 1,000), counted per UTC day. Both rows are inserted by the migration, not only the seed.
+- **Basis is set explicitly** by a member or above through `crm_set_basis`; imports and manual adds start with no basis, so nothing can be emailed until someone records why.
+- **Footer** is built on the server from the organization's billing profile and the recorded basis; the sender cannot edit or remove it. Plain text only. `Reply-To` is the sender's own address; `From` is the platform sender address with the organization's legal name as display name.
+- **Unsubscribe.** A signed token (HMAC-SHA256 over organization id and lower-cased address, secret `CRM_UNSUBSCRIBE_SECRET`, sending is not ready without it) in a public route. GET shows a confirm form so link scanners cannot unsubscribe anyone; POST (also the RFC 8058 one-click target) stores the suppression. Messages carry `List-Unsubscribe` and `List-Unsubscribe-Post`.
+- **Bounces and complaints.** Resend webhook route verifies the Svix signature and suppresses the address of the message with that provider id (`email.bounced` permanent, `email.complained`).
+- **Not built:** bulk send, templates, scheduling, open or click tracking, HTML bodies, attachments.
+- **Review focus (B2b):** emailing a suppressed or basis-less contact; a viewer or other organization sending; the cap under parallel sends; header injection through the subject; forged or replayed unsubscribe tokens; GET unsubscribing; footer missing or editable; webhook signature bypass; failed sends consuming quota; the flag being off yet a send succeeding.
