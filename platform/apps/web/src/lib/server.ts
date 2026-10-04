@@ -33,6 +33,7 @@ import { createCrmEmailService, EmailRefused } from "./crm/email";
 import { signUnsubscribeToken } from "./crm/unsubscribe";
 import { createUnsubscribeHandler } from "./crm/unsubscribe-handler";
 import { createResendWebhook } from "./crm/resend-webhook";
+import { createCredentialService } from "./credentials/service";
 import { createTeamService } from "./team/service";
 import { buildInviteEmail, createInviteMailer } from "./team/email";
 import { newInviteToken } from "./team/token";
@@ -149,6 +150,11 @@ export const publicData = createPublicData({
   fetchOne: async (view, slug) => {
     const db = await createServerSupabase();
     const { data, error } = await db.from(view).select("*").eq("slug", slug).maybeSingle();
+    return { data, error: error ? { message: error.message } : null };
+  },
+  fetchMany: async (slug) => {
+    const db = await createServerSupabase();
+    const { data, error } = await db.from("public_provider_credentials").select("kind, title, issuer, issued_on, expires_on, status").eq("slug", slug).order("issued_on", { ascending: false, nullsFirst: false }).limit(100);
     return { data, error: error ? { message: error.message } : null };
   },
 });
@@ -345,6 +351,17 @@ const CRM_UNSUB_SECRET = () => process.env.CRM_UNSUBSCRIBE_SECRET;
 const fromAddress = (from: string) => (/<([^<>\s]+@[^<>\s]+)>/.exec(from)?.[1] ?? from).trim();
 /** Display names go into a header: drop anything that could end the name or the header. */
 const displayName = (name: string) => name.replace(/[\r\n"<>,;:\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+
+/** Credential edits run through the signed-in user's own session: the database decides who may edit and review. */
+export const credentialService = (revalidate: (path: string) => void) => createCredentialService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("credential", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
+});
 
 /** Team management runs through the signed-in user's own session: the database decides who may invite, change roles or remove. */
 export const teamService = (revalidate: (path: string) => void) => createTeamService({

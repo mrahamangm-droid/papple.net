@@ -10,6 +10,7 @@ function setup(aal2 = true) {
     setSetting: vi.fn(async (_i: unknown) => undefined), setFlag: vi.fn(async (_i: unknown) => undefined), updatePlan: vi.fn(async (_i: unknown) => undefined),
     setOrgStatus: vi.fn(async (_i: unknown) => undefined), setPlatformRole: vi.fn(async (_i: unknown) => undefined),
     requestVerification: vi.fn(async (_i: unknown) => undefined), setVisibility: vi.fn(async (_i: unknown) => undefined), dismissReport: vi.fn(async (_i: unknown) => undefined), saveCategory: vi.fn(async (_i: unknown) => undefined), saveSkill: vi.fn(async (_i: unknown) => undefined), reviewVerification: vi.fn(async (_i: unknown) => undefined), revokeVerification: vi.fn(async (_i: unknown) => undefined),
+    reviewCredential: vi.fn(async (_i: unknown) => undefined), revokeCredential: vi.fn(async (_i: unknown) => undefined),
   };
   const revalidate = vi.fn();
   return { db, revalidate, actions: createAdminConsoleActions({ db, revalidate, hasSecondFactor: async () => aal2 }) };
@@ -37,6 +38,8 @@ describe("admin console actions", () => {
       actions.setPlatformRole({ userId: id, role: "support", grant: true, reason }),
       actions.reviewVerification({ requestId: id, decision: "approved", note: reason }),
       actions.revokeVerification({ orgId: id, reason }),
+      actions.reviewCredential({ credentialId: id, version: 1, decision: "approved", note: reason }),
+      actions.revokeCredential({ credentialId: id, reason }),
       actions.setVisibility({ kind: "profile", id, hidden: true, reason }),
       actions.dismissReport({ reportId: id, reason }),
       actions.saveCategory({ id: null, slug: "web-design", name: "Web design", parentId: null, position: 1, active: true, reason }),
@@ -88,6 +91,14 @@ describe("admin console actions", () => {
     const { actions, revalidate } = setup();
     expect(await actions.reviewVerification({ requestId: id, decision: "approved", note: reason })).toEqual({ ok: true });
     expect(revalidate).toHaveBeenCalledWith("/admin/verification");
+  });
+  it("reviews and revokes credentials through the database and refreshes the queue", async () => {
+    const { actions, db, revalidate } = setup();
+    expect(await actions.reviewCredential({ credentialId: id, version: 3, decision: "rejected", note: reason })).toEqual({ ok: true });
+    expect(db.reviewCredential).toHaveBeenCalledWith({ credentialId: id, version: 3, decision: "rejected", note: reason });
+    expect(await actions.revokeCredential({ credentialId: id, reason })).toEqual({ ok: true });
+    expect(revalidate).toHaveBeenCalledWith("/admin/credentials");
+    expect(await actions.reviewCredential({ credentialId: id, version: 1, decision: "maybe", note: reason })).toEqual({ ok: false, code: "invalid" });
   });
   it("moderation and taxonomy actions call the database and refresh their pages", async () => {
     const { actions, db, revalidate } = setup();

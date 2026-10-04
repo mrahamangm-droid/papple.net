@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SETTINGS, flagInput, nextCursor, orgStatusInput, parseAuditFilters, parseSettingValue, planInput, roleInput, settingInput, verificationRequestInput, verificationReviewInput } from "./validators";
+import { SETTINGS, flagInput, nextCursor, orgStatusInput, parseAuditFilters, parseSettingValue, planInput, roleInput, settingInput, verificationRequestInput, verificationReviewInput, credentialReviewInput, credentialRevokeInput } from "./validators";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const reason = "A perfectly good reason";
@@ -80,5 +80,18 @@ describe("audit filters and paging", () => {
     expect(nextCursor([{ id: 9 }, { id: 8 }], 2)).toBe(8);
     expect(nextCursor([{ id: 9 }], 2)).toBeNull();
     expect(nextCursor([], 2)).toBeNull();
+  });
+});
+
+describe("credential console inputs", () => {
+  it("need a credential id, a known decision and a reason of 10 to 1000 characters", () => {
+    expect(credentialReviewInput.safeParse({ credentialId: id, version: 2, decision: "approved", note: reason }).success).toBe(true);
+    expect(credentialReviewInput.safeParse({ credentialId: id, decision: "approved", note: reason }).success).toBe(false);
+    expect(credentialReviewInput.safeParse({ credentialId: id, version: 0, decision: "approved", note: reason }).success).toBe(false);
+    expect(credentialReviewInput.safeParse({ credentialId: id, version: 1, decision: "maybe", note: reason }).success).toBe(false);
+    expect(credentialReviewInput.safeParse({ credentialId: id, version: 1, decision: "approved", note: "short" }).success).toBe(false);
+    expect(credentialReviewInput.safeParse({ credentialId: "x", version: 1, decision: "approved", note: reason }).success).toBe(false);
+    expect(credentialRevokeInput.safeParse({ credentialId: id, reason }).success).toBe(true);
+    expect(credentialRevokeInput.safeParse({ credentialId: id, reason: "x".repeat(1001) }).success).toBe(false);
   });
 });

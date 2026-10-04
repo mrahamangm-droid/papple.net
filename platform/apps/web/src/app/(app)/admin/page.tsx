@@ -12,10 +12,11 @@ export default async function AdminHome() {
   const ctx = await requireCapability("platform.admin");
   const db = await createServerSupabase();
   const head = { count: "exact" as const, head: true };
-  const [disputes, reports, verifications, suspended, recent] = await Promise.all([
+  const [disputes, reports, verifications, credentials, suspended, recent] = await Promise.all([
     db.from("disputes").select("id", head).eq("status", "open"),
     db.from("content_reports").select("id", head).eq("status", "open"),
     db.from("verification_requests").select("id", head).eq("status", "pending"),
+    db.from("provider_credentials").select("id", head).eq("status", "pending"),
     db.from("organizations").select("id", head).eq("status", "suspended"),
     db.from("audit_log").select("id, at, action, outcome").order("id", { ascending: false }).limit(10),
   ]);
@@ -23,6 +24,7 @@ export default async function AdminHome() {
     { href: "/admin/disputes", label: "Open disputes", n: disputes.count },
     { href: "/admin/reports", label: "Open reports", n: reports.count },
     { href: "/admin/verification", label: "Pending verifications", n: verifications.count },
+    { href: "/admin/credentials", label: "Pending credential checks", n: credentials.count },
     { href: "/admin/organizations", label: "Suspended organizations", n: suspended.count },
   ];
   const tools = [["/admin/settings", "Settings and flags"], ["/admin/plans", "Plans"], ["/admin/taxonomy", "Taxonomy"], ["/admin/staff", "Staff"], ["/admin/ai", "AI usage"], ["/admin/audit", "Audit log"]];
