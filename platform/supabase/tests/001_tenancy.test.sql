@@ -51,8 +51,8 @@ select throws_ok($$insert into memberships (user_id, org_id, role) values ('6666
 select set_config('request.jwt.claim.sub','33333333-3333-3333-3333-333333333333',true);
 select is(extensions.t_rows_affected($q$update organizations set name='hacked' where id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'$q$), 0,
   'viewer cannot update org');
-select is(extensions.t_rows_affected($q$update memberships set role='owner' where user_id='33333333-3333-3333-3333-333333333333'$q$), 0,
-  'viewer cannot self-promote to owner');
+select throws_ok($$update memberships set role='owner' where user_id='33333333-3333-3333-3333-333333333333'$$, '42501', null,
+  'viewer cannot self-promote to owner (memberships are not writable directly)');
 
 -- as F (member of two orgs)
 select set_config('request.jwt.claim.sub','55555555-5555-5555-5555-555555555555',true);
