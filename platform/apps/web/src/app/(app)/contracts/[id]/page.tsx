@@ -57,6 +57,7 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
       </p>
       {who?.slug && <p className="mt-1 text-sm"><Link className="underline" href={`/p/${who.slug as string}`}>View professional profile</Link></p>}
       {view && <div className="mt-4 max-w-2xl"><PaymentNotice side={view.side} /></div>}
+      {view && <p className="mt-2 text-sm"><Link className="underline" href={`/contracts/${id}/work`}>Tasks, time and files</Link></p>}
 
       {c.status === "cancelled" && c.cancelled_reason && <p className="mt-4 text-sm">Cancelled: {c.cancelled_reason as string}</p>}
       {openDispute && (
