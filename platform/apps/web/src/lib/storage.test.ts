@@ -81,4 +81,12 @@ describe("verifyUploadedObject", () => {
     const missing = await verifyUploadedObject({ readHead: async () => null, remove }, key, { name: "a.png", declaredMime: "image/png" });
     expect(missing).toMatchObject({ ok: false });
   });
+  it("deletes an object whose stored size is not the size that was registered", async () => {
+    const remove = vi.fn(async (_k: string) => {});
+    const r = await verifyUploadedObject({ readHead: async () => ({ head: PNG, size: 600 }), remove }, key, { name: "a.png", declaredMime: "image/png", expectedSize: 500 });
+    expect(r).toEqual({ ok: false, reason: "file size does not match" });
+    expect(remove).toHaveBeenCalledWith(key);
+    const same = await verifyUploadedObject({ readHead: async () => ({ head: PNG, size: 500 }), remove: async () => {} }, key, { name: "a.png", declaredMime: "image/png", expectedSize: 500 });
+    expect(same).toMatchObject({ ok: true });
+  });
 });

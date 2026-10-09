@@ -35,6 +35,9 @@ import { createUnsubscribeHandler } from "./crm/unsubscribe-handler";
 import { createResendWebhook } from "./crm/resend-webhook";
 import { createCredentialService } from "./credentials/service";
 import { createTalentService } from "./talent/service";
+import { createWorkService } from "./work/service";
+import { storage, verifyDeps } from "./r2";
+import { verifyUploadedObject } from "./storage";
 import { createAnalyticsService } from "./analytics/service";
 import { createApiV1 } from "./api/handler";
 import { createApiKeyService } from "./api/service";
@@ -411,6 +414,26 @@ export const talentService = (revalidate: (path: string) => void) => createTalen
     return { data, error: error ? { code: error.code } : null };
   },
   revalidate,
+});
+
+/** Tasks, time and contract files run through the signed-in user's own session: the database decides who may read or change what. */
+export const workService = (revalidate: (path: string) => void) => createWorkService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("work", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
+  storage: { signUploadUrl: (key, mime, size) => storage.signUploadUrl(key, mime, size), signDownloadUrl: (key) => storage.signDownloadUrl(key) },
+  verify: (key, declared) => verifyUploadedObject(verifyDeps, key, declared),
+  removeObject: (key) => verifyDeps.remove(key),
+  // Only the service role may record a verification, so a signed-in user cannot mark an unchecked upload ready.
+  markVerified: async (fileId, size) => {
+    const { error } = await createServiceClient().rpc("file_mark_verified", { p_file: fileId, p_size: size });
+    return { error: error ? { code: error.code } : null };
+  },
+  newId: () => randomUUID(),
 });
 
 /** Team management runs through the signed-in user's own session: the database decides who may invite, change roles or remove. */

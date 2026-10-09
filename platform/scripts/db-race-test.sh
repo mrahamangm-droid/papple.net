@@ -159,5 +159,12 @@ q "update platform_settings set value='{\"default\":2}' where key='limits.api_ke
 hold; for n in 1 2 3 4 5 6; do as $U_CLIENT "select api_key_create('$O_CLIENT','Race key $n','racekey$n',repeat('$n',64))" & done; wait
 check "the API key limit holds under parallel creates" "$(q "select count(*) from api_keys where org_id='$O_CLIENT' and revoked_at is null")" 2
 
+# 21. the task and file limits hold under parallel creates
+q "update platform_settings set value='{\"default\":2}' where key in ('limits.tasks_per_contract','limits.files_per_contract')"
+hold; for n in 1 2 3 4 5 6; do as $U_CLIENT "select task_save('$O_CLIENT','dddddd99-0000-0000-0000-0000000000c2',null,'Race task $n','','normal',null,null,null,'private')" & done; wait
+check "the task limit holds under parallel creates" "$(q "select count(*) from tasks where org_id='$O_CLIENT'")" 2
+hold; for n in 1 2 3 4 5 6; do as $U_CLIENT "select file_register('$O_CLIENT','dddddd99-0000-0000-0000-0000000000c2','eeeeee99-0000-0000-0000-0000000002f$n','race$n.pdf','application/pdf',100,'orgs/$O_CLIENT/eeeeee99-0000-0000-0000-0000000002f$n.pdf','private')" & done; wait
+check "the file limit holds under parallel registers" "$(q "select count(*) from contract_files where org_id='$O_CLIENT'")" 2
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }

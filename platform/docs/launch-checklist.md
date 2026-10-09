@@ -67,6 +67,11 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 - [ ] Know the limits: buyer-side hiring only (no provider earnings view yet); no CSV export or emailed reports; numbers are computed live from contracts, payments and invitations, with a refund still in progress counted as paid until it completes; refunds are dated by when they were completed; months are UTC and the monthly table shows the latest 13; there are no indexes tuned for very large organizations yet.
 - [ ] Open `/analytics` for one staging organization with real contracts and check each figure against the Contracts page. Owner + Claude.
 
+## Contract work and files
+- [ ] Review the per-plan limits (database settings like the other `limits.*`): `limits.tasks_per_contract` (50 / 200 / 1,000 / unlimited), `limits.files_per_contract` (20 / 100 / 500 / unlimited) and `limits.storage_mb` per organization (100 MB / 1 GB / 10 GB / unlimited; pending uploads count). Owner.
+- [ ] Know the limits: uploaded files are checked for type, exact size and leading bytes but are **not scanned for viruses**, and for five minutes after upload the uploader's own signed URL could still replace the bytes with others of the same size and type; an upload that was never finished stays as a pending row (visible only to its own organization, who can delete it) and there is no automatic cleanup yet; the other party can read only what is shared, and only read; time records are never shared; no folders, versions or task dependencies yet; the list pages are not paginated.
+- [ ] On staging with two test accounts (client and professional): create a private task and a shared task as the professional, upload one private and one shared file, and confirm the client sees only the shared items and can download only the shared file. Owner + Claude.
+
 ## API access
 - [ ] Review the per-plan active key limit (`limits.api_keys`: 0 / 0 / 2 / 10 for default / Professional+ / Business / Enterprise; 0 means no API access; a database setting like the other `limits.*`). Owner.
 - [ ] Decide whether admins (not only owners) may create and revoke keys. Today owners only, which is the safer default. Owner.

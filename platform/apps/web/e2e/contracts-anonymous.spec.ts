@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/contracts", "/contracts/11111111-1111-4111-8111-111111111111", "/settings/payouts", "/settings/verification", "/settings/billing", "/settings/invoicing", "/settings/api-keys", "/crm", "/crm/33333333-3333-4333-8333-333333333333", "/settings/team", "/settings/credentials", "/talent", "/talent/11111111-1111-4111-8111-111111111111", "/invitations", "/analytics", "/invite/" + "a".repeat(43), "/invite/short","/contracts/11111111-1111-4111-8111-111111111111/invoices/22222222-2222-4222-8222-222222222222"]) {
+for (const path of ["/contracts", "/contracts/11111111-1111-4111-8111-111111111111", "/contracts/11111111-1111-4111-8111-111111111111/work", "/settings/payouts", "/settings/verification", "/settings/billing", "/settings/invoicing", "/settings/api-keys", "/crm", "/crm/33333333-3333-4333-8333-333333333333", "/settings/team", "/settings/credentials", "/talent", "/talent/11111111-1111-4111-8111-111111111111", "/invitations", "/analytics", "/invite/" + "a".repeat(43), "/invite/short","/contracts/11111111-1111-4111-8111-111111111111/invoices/22222222-2222-4222-8222-222222222222"]) {
   test(`signed-in area ${path} redirects to /signin`, async ({ request }) => {
     const res = await request.get(path, { maxRedirects: 0 });
     expect(res.status()).toBe(307);
@@ -67,4 +67,10 @@ test("the read-only API refuses requests without a well formed key and never red
     }
   }
   expect((await request.post("/api/v1/projects", { maxRedirects: 0 })).status()).toBe(405);
+});
+
+test("the contract file download route gives nothing to anonymous callers", async ({ request }) => {
+  const res = await request.get("/api/work/files/11111111-1111-4111-8111-111111111111", { maxRedirects: 0 });
+  expect([401, 403]).toContain(res.status());
+  expect(res.headers().location).toBeUndefined();
 });
