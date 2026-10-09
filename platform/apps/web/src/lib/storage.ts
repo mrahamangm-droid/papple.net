@@ -50,10 +50,14 @@ export interface VerifyDeps {
 export async function verifyUploadedObject(
   deps: VerifyDeps,
   key: string,
-  declared: { name: string; declaredMime: string },
+  declared: { name: string; declaredMime: string; expectedSize?: number },
 ): Promise<UploadCheck> {
   const stored = await deps.readHead(key, 16);
   if (!stored) return { ok: false, reason: "object not found" };
+  if (declared.expectedSize !== undefined && stored.size !== declared.expectedSize) {
+    await deps.remove(key);
+    return { ok: false, reason: "file size does not match" };
+  }
   const check = stored.size > MAX_UPLOAD_BYTES
     ? ({ ok: false, reason: "file exceeds 10 MB" } as const)
     : validateUpload({ name: declared.name, size: stored.size, declaredMime: declared.declaredMime, head: stored.head });
