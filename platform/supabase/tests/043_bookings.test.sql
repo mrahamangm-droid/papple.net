@@ -9,7 +9,7 @@ insert into memberships (user_id, org_id, role) values
 insert into provider_profiles (org_id, slug, headline) values ('cccccc43-0000-0000-0000-0000000000b1','provider-43','Provider headline');
 insert into services (id, org_id, slug, title, status) values ('dddddd43-0000-0000-0000-000000000001','cccccc43-0000-0000-0000-0000000000b1','intro-call-43','Intro call','published'),('dddddd43-0000-0000-0000-000000000002','cccccc43-0000-0000-0000-0000000000b1','draft-call-43','Draft call','draft');
 -- a Monday five weeks ahead, so the tests never depend on today's date
-select set_config('t.mon', (date_trunc('week', now() at time zone 'UTC')::date + 35)::text, false);
+select set_config('t.mon', (date_trunc('week', now() at time zone 'UTC')::date + 42)::text, false);
 create function pg_temp.at(t text) returns timestamptz language sql as $$ select (current_setting('t.mon')::date + t::time) at time zone 'UTC' $$;
 create function pg_temp.mon_slots() returns text language sql as
 $$ select coalesce(string_agg(to_char(s at time zone 'UTC','HH24:MI'), ',' order by s), '') from booking_slots('dddddd43-0000-0000-0000-000000000001', pg_temp.at('00:00'), pg_temp.at('23:59')) s $$;

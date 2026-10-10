@@ -1,5 +1,5 @@
 begin;
-select plan(75);
+select plan(73);
 
 insert into auth.users (id, email) values
  ('aaaaaa44-0000-0000-0000-0000000000a1','p@x.test'),('aaaaaa44-0000-0000-0000-0000000000a2','pm@x.test'),('aaaaaa44-0000-0000-0000-0000000000a3','c@x.test'),('aaaaaa44-0000-0000-0000-0000000000a4','cm@x.test'),('aaaaaa44-0000-0000-0000-0000000000a5','cv@x.test'),('aaaaaa44-0000-0000-0000-0000000000a6','d@x.test'),('aaaaaa44-0000-0000-0000-0000000000a7','e@x.test');

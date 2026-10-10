@@ -235,5 +235,24 @@ psql -q -c "set role authenticated" -c "select set_config('request.jwt.claim.sub
 wait
 check "a payment committed while a release waited keeps the booking" "$(q "select b.status || ' ' || p.status from bookings b join booking_payments p on p.booking_id = b.id where b.id='$B_LATE'")" "confirmed succeeded"
 
+# 27. two admins accepting two contracts at once, each fitting the remaining budget alone but not together:
+#     one is accepted, the other becomes an owner approval request (the budget lock makes the second count the first)
+U_BO=aaaaaa99-0000-0000-0000-0000000007a1; U_BA1=aaaaaa99-0000-0000-0000-0000000007a2; U_BA2=aaaaaa99-0000-0000-0000-0000000007a3
+O_BC=cccccc99-0000-0000-0000-0000000007c1
+q "insert into auth.users (id,email) values ('$U_BO','bo@r.test'),('$U_BA1','ba1@r.test'),('$U_BA2','ba2@r.test');
+   insert into organizations (id,type,name) values ('$O_BC','client_company','Budget Client');
+   insert into memberships (user_id,org_id,role) values ('$U_BO','$O_BC','owner'),('$U_BA1','$O_BC','admin'),('$U_BA2','$O_BC','admin');
+   insert into projects (id,org_id,title,description,currency,status)
+     select ('eeeeee99-0000-0000-0000-00000000070' || g)::uuid,'$O_BC','Budget project '||g,'Detailed description','USD','open' from generate_series(1,2) g;
+   insert into proposals (id,project_id,org_id,cover_letter,price,currency,delivery_days,status)
+     select ('ffffff99-0000-0000-0000-00000000070' || g)::uuid,('eeeeee99-0000-0000-0000-00000000070' || g)::uuid,'$O_PRO','Offer',6000,'USD',10,'shortlisted' from generate_series(1,2) g;
+   insert into contracts (id,project_id,proposal_id,client_org_id,provider_org_id,title,price,currency,commission_pro_bps,commission_client_bps)
+     select ('dddddd99-0000-0000-0000-00000000070' || g)::uuid,('eeeeee99-0000-0000-0000-00000000070' || g)::uuid,('ffffff99-0000-0000-0000-00000000070' || g)::uuid,'$O_BC','$O_PRO','Budget contract '||g,6000,'USD',500,200 from generate_series(1,2) g;
+   insert into milestones (contract_id,position,title,amount) select ('dddddd99-0000-0000-0000-00000000070' || g)::uuid,1,'All',6000 from generate_series(1,2) g;
+   insert into budgets (org_id,enabled,period,amount_minor,currency) values ('$O_BC',true,'quarter',10000,'USD');"
+hold; as $U_BA1 "select accept_contract('$O_BC','dddddd99-0000-0000-0000-000000000701')" & as $U_BA2 "select accept_contract('$O_BC','dddddd99-0000-0000-0000-000000000702')" & wait
+check "only one of two parallel acceptances fits the budget" "$(q "select count(*) from contracts where client_org_id='$O_BC' and accepted_by_client")" 1
+check "the other waits for an owner" "$(q "select count(*) from spend_requests where org_id='$O_BC' and status='pending' and reasons = '{budget}'")" 1
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
