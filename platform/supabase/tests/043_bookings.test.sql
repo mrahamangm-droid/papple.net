@@ -1,11 +1,12 @@
 begin;
-select plan(64);
+select plan(71);
 
 insert into auth.users (id, email) values
  ('aaaaaa43-0000-0000-0000-0000000000a1','p@x.test'),('aaaaaa43-0000-0000-0000-0000000000a2','pa@x.test'),('aaaaaa43-0000-0000-0000-0000000000a3','pm@x.test'),('aaaaaa43-0000-0000-0000-0000000000a4','c@x.test'),('aaaaaa43-0000-0000-0000-0000000000a5','cm@x.test'),('aaaaaa43-0000-0000-0000-0000000000a6','cv@x.test'),('aaaaaa43-0000-0000-0000-0000000000a7','d@x.test'),('aaaaaa43-0000-0000-0000-0000000000a8','s@x.test');
 insert into organizations (id, type, name) values ('cccccc43-0000-0000-0000-0000000000b1','agency','Provider'),('cccccc43-0000-0000-0000-0000000000c1','client_company','Client'),('cccccc43-0000-0000-0000-0000000000d1','client_company','Other client');
 insert into memberships (user_id, org_id, role) values
  ('aaaaaa43-0000-0000-0000-0000000000a1','cccccc43-0000-0000-0000-0000000000b1','owner'),('aaaaaa43-0000-0000-0000-0000000000a2','cccccc43-0000-0000-0000-0000000000b1','admin'),('aaaaaa43-0000-0000-0000-0000000000a3','cccccc43-0000-0000-0000-0000000000b1','member'),('aaaaaa43-0000-0000-0000-0000000000a4','cccccc43-0000-0000-0000-0000000000c1','owner'),('aaaaaa43-0000-0000-0000-0000000000a5','cccccc43-0000-0000-0000-0000000000c1','member'),('aaaaaa43-0000-0000-0000-0000000000a6','cccccc43-0000-0000-0000-0000000000c1','viewer'),('aaaaaa43-0000-0000-0000-0000000000a7','cccccc43-0000-0000-0000-0000000000d1','owner');
+insert into provider_profiles (org_id, slug, headline) values ('cccccc43-0000-0000-0000-0000000000b1','provider-43','Provider headline');
 insert into services (id, org_id, slug, title, status) values ('dddddd43-0000-0000-0000-000000000001','cccccc43-0000-0000-0000-0000000000b1','intro-call-43','Intro call','published'),('dddddd43-0000-0000-0000-000000000002','cccccc43-0000-0000-0000-0000000000b1','draft-call-43','Draft call','draft');
 -- a Monday five weeks ahead, so the tests never depend on today's date
 select set_config('t.mon', (date_trunc('week', now() at time zone 'UTC')::date + 35)::text, false);
@@ -88,6 +89,24 @@ reset role; update booking_settings set buffer_minutes = 30 where org_id = 'cccc
 select is(pg_temp.mon_slots(), '10:30', 'with a 30 minute gap only slots clear of the booking and its gap remain');
 reset role; update booking_settings set buffer_minutes = 0 where org_id = 'cccccc43-0000-0000-0000-0000000000b1'; set local role authenticated;
 
+-- 5b. lowering the gap: a slot the list offers must really be bookable
+reset role; update bookings set status = 'cancelled' where id = current_setting('t.b1')::uuid; update booking_settings set buffer_minutes = 30 where org_id = 'cccccc43-0000-0000-0000-0000000000b1'; set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa43-0000-0000-0000-0000000000a7',true);
+select lives_ok($$select set_config('t.b3', booking_request('cccccc43-0000-0000-0000-0000000000d1','dddddd43-0000-0000-0000-000000000001', pg_temp.at('10:00'), '')::text, false)$$, 'a 10:00 booking made while the gap is 30 minutes');
+reset role; update booking_settings set buffer_minutes = 0 where org_id = 'cccccc43-0000-0000-0000-0000000000b1'; set local role authenticated;
+select is(pg_temp.mon_slots(), '09:00,09:30', 'after lowering the gap, the slot still covered by the stored gap is not offered');
+reset role; update bookings set status = 'cancelled' where id = current_setting('t.b3')::uuid; update bookings set status = 'pending' where id = current_setting('t.b1')::uuid; set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa43-0000-0000-0000-0000000000a5',true);
+
+-- 5c. a suspended or hidden professional cannot be booked
+reset role; update organizations set status = 'suspended' where id = 'cccccc43-0000-0000-0000-0000000000b1'; set local role authenticated;
+select is(booking_offer('dddddd43-0000-0000-0000-000000000001'), null::int, 'a suspended professional does not offer bookings');
+select throws_ok($$select booking_slots('dddddd43-0000-0000-0000-000000000001', pg_temp.at('00:00'), pg_temp.at('23:59'))$$, '22023', null, 'nor slots');
+select throws_ok($$select booking_request('cccccc43-0000-0000-0000-0000000000c1','dddddd43-0000-0000-0000-000000000001', pg_temp.at('10:30'), '')$$, '22023', null, 'nor accepts requests');
+reset role; update organizations set status = 'active' where id = 'cccccc43-0000-0000-0000-0000000000b1'; update provider_profiles set visibility = 'private' where org_id = 'cccccc43-0000-0000-0000-0000000000b1'; set local role authenticated;
+select is(booking_offer('dddddd43-0000-0000-0000-000000000001'), null::int, 'a private profile does not offer bookings');
+reset role; update provider_profiles set visibility = 'public' where org_id = 'cccccc43-0000-0000-0000-0000000000b1'; set local role authenticated;
+
 -- 6. daily cap
 reset role; update platform_settings set value = '{"default":1}' where key = 'limits.bookings_pending_per_day'; set local role authenticated;
 select set_config('request.jwt.claim.sub','aaaaaa43-0000-0000-0000-0000000000a4',true);
@@ -118,6 +137,11 @@ select is(pg_temp.mon_slots(), '09:00,09:30,10:00,10:30', 'the cancelled slot is
 select throws_ok($$select booking_cancel('cccccc43-0000-0000-0000-0000000000c1', current_setting('t.b1')::uuid, 'again')$$, '55000', null, 'a cancelled booking cannot be cancelled again');
 reset role;
 select is((select count(*)::int from notifications where type = 'booking_cancelled' and user_id in ('aaaaaa43-0000-0000-0000-0000000000a1','aaaaaa43-0000-0000-0000-0000000000a2','aaaaaa43-0000-0000-0000-0000000000a3')), 3, 'the provider is told about the cancellation');
+
+reset role; update platform_settings set value = '{"default":1}' where key = 'limits.bookings_pending_per_day'; set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa43-0000-0000-0000-0000000000a4',true);
+select throws_ok($$select booking_request('cccccc43-0000-0000-0000-0000000000c1','dddddd43-0000-0000-0000-000000000001', pg_temp.at('10:30'), '')$$, '54000', null, 'a cancelled request still counts toward the daily limit');
+reset role; update platform_settings set value = '{"default":5}' where key = 'limits.bookings_pending_per_day';
 
 -- 9. an expired pending booking cannot be confirmed
 insert into bookings (id, provider_org_id, client_org_id, service_id, starts_at, ends_at, blocked, status)

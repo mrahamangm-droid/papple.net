@@ -2,7 +2,7 @@
 export interface IcsEvent { uid: string; start: Date; end: Date; title: string; description: string; url?: string | null; now: Date }
 
 const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-const text = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
+const text = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 
 /** Splits a content line into 75-octet pieces; continuation lines start with one space (which counts toward the 75). */
 function fold(line: string): string {

@@ -20,7 +20,7 @@ describe("buildIcs", () => {
   it("escapes text so a note cannot add lines or properties", () => {
     const ics = buildIcs({ ...base, title: "A, B; C\\D", description: "a\r\nEND:VEVENT\r\nX" });
     expect(ics.split("\r\n").filter((l) => l === "END:VEVENT")).toHaveLength(1);
-    expect(ics).toContain("SUMMARY:A\\, B\; C\\\\D\r\n");
+    expect(ics).toContain("SUMMARY:A\\, B\\; C\\\\D\r\n");
     expect(ics).toContain("DESCRIPTION:a\\nEND:VEVENT\\nX\r\n");
   });
   it("includes an https meeting link and drops anything else", () => {

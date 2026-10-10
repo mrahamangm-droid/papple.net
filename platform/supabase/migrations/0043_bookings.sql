@@ -53,7 +53,7 @@ create index bookings_client_idx on public.bookings (client_org_id, starts_at);
 create index bookings_provider_idx on public.bookings (provider_org_id, starts_at);
 
 insert into public.platform_settings (key, value, description) values
-  ('limits.bookings_pending_per_day', '{"default":5}', 'Max pending bookings a client organization can create in 24 hours (null = unlimited)')
+  ('limits.bookings_pending_per_day', '{"default":5}', 'Max booking requests a client organization can make in 24 hours, whatever happened to them (null = unlimited)')
 on conflict (key) do nothing;
 
 alter table public.booking_settings enable row level security;
@@ -109,6 +109,11 @@ $$ begin
   if not found then raise exception 'not allowed' using errcode = '42501'; end if;
 end $$;
 
+-- Bookable only while the service is publicly listed: published, with a public, active profile and an active organization.
+create function public.booking_listed(p_service uuid) returns boolean
+language sql stable security definer set search_path = public as
+$$ select exists (select 1 from public_service_cards where id = p_service) $$;
+
 -- Every slot start the weekly hours produce between two instants, before notice, horizon and existing bookings.
 -- Local times that do not exist (the spring-forward gap) are dropped by the round-trip check.
 create function public.booking_candidates(p_org uuid, p_minutes int, p_from timestamptz, p_to timestamptz) returns setof timestamptz
@@ -128,25 +133,31 @@ $$ with s as (select timezone as tz from booking_settings where org_id = p_org),
 
 create function public.booking_slots(p_service uuid, p_from timestamptz, p_to timestamptz) returns setof timestamptz
 language plpgsql stable security definer set search_path = public as
-$$ declare v_svc services; v_set booking_settings; v_len interval; v_gap interval;
+$$ declare v_svc services; v_set booking_settings; v_len interval; v_gap interval; v_lo timestamptz; v_hi timestamptz;
 begin
   if auth.uid() is null then raise exception 'not allowed' using errcode = '42501'; end if;
   if p_from is null or p_to is null or p_to <= p_from or p_to - p_from > interval '31 days' then raise exception 'invalid range' using errcode = '22023'; end if;
   select * into v_svc from services where id = p_service;
-  if not found or v_svc.status <> 'published' or v_svc.booking_minutes is null then raise exception 'not bookable' using errcode = '22023'; end if;
+  if not found or v_svc.booking_minutes is null or not public.booking_listed(p_service) then raise exception 'not bookable' using errcode = '22023'; end if;
   select * into v_set from booking_settings where org_id = v_svc.org_id;
   if not found or not v_set.enabled then raise exception 'not bookable' using errcode = '22023'; end if;
   v_len := make_interval(mins => v_svc.booking_minutes);
   v_gap := make_interval(mins => v_set.buffer_minutes);
+  v_lo := greatest(p_from, now() + make_interval(hours => v_set.min_notice_hours));
+  v_hi := least(p_to, now() + make_interval(days => v_set.horizon_days));
+  if v_hi <= v_lo then return; end if;
   return query
-    select c from public.booking_candidates(v_svc.org_id, v_svc.booking_minutes,
-                                           greatest(p_from, now() + make_interval(hours => v_set.min_notice_hours)),
-                                           least(p_to, now() + make_interval(days => v_set.horizon_days))) c
-    where not exists (
-      select 1 from bookings b
+    -- only bookings near the requested window (uses the exclusion constraint's gist index; stored gaps are at most 120 minutes)
+    with near as materialized (
+      select b.starts_at, b.ends_at, b.blocked from bookings b
       where b.provider_org_id = v_svc.org_id and b.status in ('pending','confirmed')
-        -- the current gap applies after every booking, so neither may start inside the other's gap
-        and (tstzrange(b.starts_at, b.ends_at + v_gap) && tstzrange(c, c + v_len) or tstzrange(b.starts_at, b.ends_at) && tstzrange(c, c + v_len + v_gap)))
+        and b.blocked && tstzrange(v_lo - v_gap - interval '120 minutes', v_hi + v_len + v_gap))
+    select c from public.booking_candidates(v_svc.org_id, v_svc.booking_minutes, v_lo, v_hi) c
+    where not exists (
+      select 1 from near b
+      where tstzrange(b.starts_at, b.ends_at + v_gap) && tstzrange(c, c + v_len)      -- inside the current gap after a booking
+         or tstzrange(b.starts_at, b.ends_at) && tstzrange(c, c + v_len + v_gap)      -- its own gap would reach a booking
+         or b.blocked && tstzrange(c, c + v_len + v_gap))                             -- the stored gap (what the constraint checks)
     order by c;
 end $$;
 
@@ -154,7 +165,7 @@ end $$;
 create function public.booking_offer(p_service uuid) returns int
 language sql stable security definer set search_path = public as
 $$ select s.booking_minutes from services s join booking_settings b on b.org_id = s.org_id and b.enabled
-   where s.id = p_service and s.status = 'published' and s.booking_minutes is not null $$;
+   where s.id = p_service and s.booking_minutes is not null and public.booking_listed(p_service) $$;
 
 -- An organization's bookings on both sides, with the service title and the other organization's name
 -- (neither is otherwise readable across organizations). Members of p_org only; the person who booked stays private.
@@ -181,7 +192,7 @@ $$ declare v_svc services; v_set booking_settings; v_note text := btrim(coalesce
 begin
   if auth.uid() is null or not public.has_org_role(p_org, array['owner','admin','member']) then raise exception 'not allowed' using errcode = '42501'; end if;
   select * into v_svc from services where id = p_service;
-  if not found then raise exception 'not bookable' using errcode = '22023'; end if;
+  if not found or not public.booking_listed(p_service) then raise exception 'not bookable' using errcode = '22023'; end if;
   -- nobody books their own organization, or a professional they belong to
   if v_svc.org_id = p_org or public.is_member(v_svc.org_id) then raise exception 'not allowed' using errcode = '42501'; end if;
   if char_length(v_note) > 1000 or p_start is null then raise exception 'invalid request' using errcode = '22023'; end if;
@@ -197,7 +208,8 @@ begin
       raise exception 'that time was just taken' using errcode = '23505'; end if;
     raise exception 'that time is not available' using errcode = '22023'; end if;
   v_cap := public.org_limit(p_org, 'limits.bookings_pending_per_day');
-  if v_cap is not null and (select count(*) from bookings where client_org_id = p_org and status = 'pending' and created_at > now() - interval '24 hours') >= v_cap then
+  -- every request in the last 24 hours counts, so cancelling and re-requesting cannot flood a professional
+  if v_cap is not null and (select count(*) from bookings where client_org_id = p_org and created_at > now() - interval '24 hours') >= v_cap then
     raise exception 'daily booking limit reached' using errcode = '54000'; end if;
   select * into v_set from booking_settings where org_id = v_svc.org_id;
   begin
@@ -252,7 +264,7 @@ begin
   end loop;
 end $$;
 
-revoke execute on function public.booking_audit(uuid, text, uuid, jsonb), public.booking_candidates(uuid, int, timestamptz, timestamptz) from public, anon, authenticated;
+revoke execute on function public.booking_audit(uuid, text, uuid, jsonb), public.booking_candidates(uuid, int, timestamptz, timestamptz), public.booking_listed(uuid) from public, anon, authenticated;
 revoke execute on function public.booking_settings_save(uuid, boolean, text, int, int, int, jsonb), public.service_set_booking(uuid, uuid, int),
   public.booking_slots(uuid, timestamptz, timestamptz), public.booking_request(uuid, uuid, timestamptz, text),
   public.booking_decide(uuid, uuid, boolean, text, text), public.booking_cancel(uuid, uuid, text), public.booking_offer(uuid), public.booking_list(uuid) from public, anon;
