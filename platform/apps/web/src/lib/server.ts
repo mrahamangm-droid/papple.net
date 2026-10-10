@@ -437,7 +437,7 @@ export const workService = (revalidate: (path: string) => void) => createWorkSer
   newId: () => randomUUID(),
 });
 
-/** Team management runs through the signed-in user's own session: the database decides who may invite, change roles or remove. */
+/** Spend approvals also run as the signed-in user: the database decides who may set the rule, decide or withdraw. */
 export const approvalsService = (revalidate: (path: string) => void) => createApprovalsService({
   getUserId: async () => (await getSessionUser())?.id ?? null,
   throttle: (userId) => throttle("approvals", `user:${userId}`),
@@ -448,6 +448,7 @@ export const approvalsService = (revalidate: (path: string) => void) => createAp
   revalidate,
 });
 
+/** Team management runs through the signed-in user's own session: the database decides who may invite, change roles or remove. */
 export const teamService = (revalidate: (path: string) => void) => createTeamService({
   getUserId: async () => (await getSessionUser())?.id ?? null,
   throttle: (userId) => throttle("team", `user:${userId}`),

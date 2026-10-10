@@ -1,7 +1,7 @@
 import { formatMinor } from "../marketplace/present";
 import { isValidUuid } from "../marketplace/validators";
 
-export type ApprovalFailure = "forbidden" | "invalid" | "duplicate" | "rate" | "error";
+export type ApprovalFailure = "forbidden" | "invalid" | "duplicate" | "stale" | "rate" | "error";
 export type AcceptOutcome = "accepted" | "approval_requested" | "approval_pending";
 export type DecideOutcome = "approved" | "rejected" | "lapsed";
 
@@ -14,6 +14,7 @@ const MESSAGES: Record<ApprovalFailure, string> = {
   forbidden: "You are not allowed to do that.",
   invalid: "Some of the information provided is not valid.",
   duplicate: "That already exists.",
+  stale: "This request was already decided or withdrawn. Refresh the page to see where it stands.",
   rate: "Too many attempts. Please wait a minute and try again.",
   error: "Something went wrong. Please try again.",
 };

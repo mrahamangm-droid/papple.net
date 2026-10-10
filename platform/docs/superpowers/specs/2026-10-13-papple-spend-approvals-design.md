@@ -39,6 +39,8 @@ Multi-step or multi-approver chains, per-person spending limits, budgets, gating
 - Notifications (existing `notify`): `spend_approval_requested` to each owner, and `spend_request_approved` / `spend_request_rejected` to the requester. The payload holds only `contract_id` and `request_id`; amounts never go into notifications.
 
 ## Server and UI (apps/web)
+*As built:* the module follows the `lib/team` shape. Validators live inside `lib/approvals/service.ts` (`createApprovalsService`), RPCs are called through the injected `rpc` (no separate `db.ts`), and `lib/approvals/org.ts` picks the organization. Migration 0042 then made deciding lock the contract before the request, and returns 55000 ("already decided") for a request that is no longer pending.
+
 - `lib/approvals/validators.ts` (zod): policy input with a major-unit amount converted with the existing money helpers, decide input, withdraw input.
 - `lib/approvals/db.ts`: typed RPC wrappers using `mapDbError`.
 - `lib/approvals/service.ts`: `createApprovalActions(deps)`. Flow per action: parse → authenticate → throttle (new rule `approvals`, 30/min per user) → RPC → revalidate. Result `{ok:true, outcome?}` or `{ok:false, code}` with code in `forbidden | invalid | duplicate | rate | error`.

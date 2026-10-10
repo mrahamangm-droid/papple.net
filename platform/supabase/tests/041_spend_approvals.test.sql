@@ -110,7 +110,7 @@ select throws_ok($$select spend_request_decide('cccccc41-0000-0000-0000-00000000
 select is(spend_request_decide('cccccc41-0000-0000-0000-0000000000c1', (select id from t_req), true, ''), 'approved', 'an owner approves');
 select is((select accepted_by_client from contracts where id = 'dddddd41-0000-0000-0000-000000000001'), true, 'approval accepts the contract for the client');
 select is((select decided_by from spend_requests where id = (select id from t_req)), 'aaaaaa41-0000-0000-0000-0000000000a1'::uuid, 'the decider is recorded');
-select throws_ok($$select spend_request_decide('cccccc41-0000-0000-0000-0000000000c1', (select id from t_req), true, '')$$, '22023', null, 'a decided request cannot be decided again');
+select throws_ok($$select spend_request_decide('cccccc41-0000-0000-0000-0000000000c1', (select id from t_req), true, '')$$, '55000', null, 'a decided request cannot be decided again');
 reset role;
 select is((select count(*)::int from notifications where type = 'spend_request_approved' and user_id = 'aaaaaa41-0000-0000-0000-0000000000a3'), 1, 'the requester is told it was approved');
 
@@ -142,7 +142,7 @@ select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a4'
 select throws_ok($$select spend_request_withdraw('cccccc41-0000-0000-0000-0000000000c1', (select id from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000001' and status = 'pending'))$$, '42501', null, 'another admin cannot withdraw it');
 select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a1',true);
 select lives_ok($$select spend_request_withdraw('cccccc41-0000-0000-0000-0000000000c1', (select id from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000001' and status = 'pending'))$$, 'an owner can withdraw it');
-select throws_ok($$select spend_request_withdraw('cccccc41-0000-0000-0000-0000000000c1', (select id from t_req))$$, '22023', null, 'a decided request cannot be withdrawn');
+select throws_ok($$select spend_request_withdraw('cccccc41-0000-0000-0000-0000000000c1', (select id from t_req))$$, '55000', null, 'a decided request cannot be withdrawn');
 
 -- 10. a cancelled contract lapses its request
 select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a3',true);
@@ -151,7 +151,7 @@ select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a6'
 select lives_ok($$select cancel_contract('cccccc41-0000-0000-0000-0000000000b1','dddddd41-0000-0000-0000-000000000003','changed plans')$$, 'the provider cancels the draft');
 select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a1',true);
 select is((select status from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000003'), 'lapsed', 'cancelling the draft lapses its request at once');
-select throws_ok($$select spend_request_decide('cccccc41-0000-0000-0000-0000000000c1', (select id from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000003'), true, '')$$, '22023', null, 'and it can no longer be approved');
+select throws_ok($$select spend_request_decide('cccccc41-0000-0000-0000-0000000000c1', (select id from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000003'), true, '')$$, '55000', null, 'and it can no longer be approved');
 
 -- 10b. review fixes: a request never outlives its contract being settled another way
 reset role; update contracts set accepted_by_client = false where id = 'dddddd41-0000-0000-0000-000000000001'; set local role authenticated;

@@ -53,6 +53,7 @@ describe("who may act", () => {
   it("has plain failure messages", () => {
     expect(approvalFailureMessage("forbidden")).toMatch(/not allowed/i);
     expect(approvalFailureMessage("rate")).toMatch(/too many/i);
+    expect(approvalFailureMessage("stale")).toBe("This request was already decided or withdrawn. Refresh the page to see where it stands.");
   });
 });
 
