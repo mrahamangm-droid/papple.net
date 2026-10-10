@@ -1,6 +1,6 @@
 /** Subscription billing on the platform Stripe account. Kept apart from the milestone-payment provider (Connect). */
 export interface BillingProvider {
-  createSubscriptionCheckout(i: { orgId: string; priceId: string; customerId?: string | null; idempotencyKey?: string; successUrl: string; cancelUrl: string }): Promise<{ url: string }>;
+  createSubscriptionCheckout(i: { orgId: string; priceId: string; customerId?: string | null; trialDays?: number; idempotencyKey?: string; successUrl: string; cancelUrl: string }): Promise<{ url: string }>;
   createPortalSession(i: { customerId: string; returnUrl: string }): Promise<{ url: string }>;
 }
 
@@ -17,7 +17,9 @@ export function createStripeBilling(stripe: StripeBillingLike): BillingProvider 
         mode: "subscription",
         client_reference_id: i.orgId,
         metadata: { org_id: i.orgId },
-        subscription_data: { metadata: { org_id: i.orgId } },
+        // a trial still takes the card up front, so the first charge after the trial cannot fail for want of one
+        subscription_data: { metadata: { org_id: i.orgId }, ...(i.trialDays && i.trialDays > 0 ? { trial_period_days: i.trialDays } : {}) },
+        ...(i.trialDays && i.trialDays > 0 ? { payment_method_collection: "always" } : {}),
         line_items: [{ price: i.priceId, quantity: 1 }],
         ...(i.customerId ? { customer: i.customerId } : {}),
         success_url: i.successUrl,

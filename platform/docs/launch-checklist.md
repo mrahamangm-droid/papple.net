@@ -17,7 +17,7 @@ Owner = Eng Habib / Papple World FZE LLC. "Claude" items are already done in cod
 
 ## Plans and billing
 - [ ] Enable Stripe Billing on the platform account and turn on the customer portal (cancel, update card, invoices). Owner.
-- [ ] In Stripe create one recurring Price per paid plan (Professional Plus, Business), then store each id on the plan (`plans.stripe_price_id`, SQL editor or the Plans page when it supports it). Plans without a price cannot be bought. Owner.
+- [ ] In Stripe create one monthly recurring Price per paid plan: Professional Plus USD 29.99, Business USD 49.99, Enterprise USD 99.99 (migration 0046 cleared the old ids). Store each id on the plan (`plans.stripe_price_id`, SQL editor or the Plans page when it supports it). Plans without a price cannot be bought. The 30-day free trial is added by the app at checkout (setting `billing.trial_days`); do not add a trial on the Stripe Price itself. Owner.
 - [ ] Add `customer.subscription.created`, `customer.subscription.updated` and `customer.subscription.deleted` to the platform webhook endpoint `we_1UM8HXChhnG4ffxfhQtMpBbd`. Owner (or approve Claude to do it).
 - [ ] Set `billing.grace_days` (default 7) in Admin settings: how long a failed payment keeps paid features. Owner.
 - [ ] Run one test-mode subscription: buy, see the plan change, fail a payment with a Stripe test card, cancel in the portal. Owner + Claude. Webhooks alert (Sentry) on `unknown_org`, `unknown_plan` and `conflict` outcomes.

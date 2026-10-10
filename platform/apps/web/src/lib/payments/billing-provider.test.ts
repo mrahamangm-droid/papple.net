@@ -19,6 +19,14 @@ describe("billing provider", () => {
     });
     expect(create.mock.calls[0]![0]).not.toHaveProperty("customer");
   });
+  it("starts a free trial when asked, and none otherwise", async () => {
+    const { billing, create } = fake();
+    await billing.createSubscriptionCheckout({ orgId: "org-1", priceId: "price_pro", trialDays: 30, successUrl: "https://a/s", cancelUrl: "https://a/c" });
+    expect(create.mock.calls[0]![0]).toMatchObject({ subscription_data: { metadata: { org_id: "org-1" }, trial_period_days: 30 }, payment_method_collection: "always" });
+    await billing.createSubscriptionCheckout({ orgId: "org-1", priceId: "price_pro", trialDays: 0, successUrl: "https://a/s", cancelUrl: "https://a/c" });
+    expect(create.mock.calls[1]![0]).toMatchObject({ subscription_data: { metadata: { org_id: "org-1" } } });
+    expect((create.mock.calls[1]![0] as { subscription_data: object }).subscription_data).not.toHaveProperty("trial_period_days");
+  });
   it("reuses an existing customer instead of creating a second one", async () => {
     const { billing, create } = fake();
     await billing.createSubscriptionCheckout({ orgId: "org-1", priceId: "price_pro", customerId: "cus_1", successUrl: "https://a/s", cancelUrl: "https://a/c" });
