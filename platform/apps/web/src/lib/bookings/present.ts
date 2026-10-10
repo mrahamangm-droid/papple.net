@@ -73,3 +73,16 @@ export function bookingPaymentState(r: PaymentRow, now: Date = new Date()): { ki
 export function bookingPriceLine(offer: { price: number; currency: string } | null): string | null {
   return offer ? `${formatMinor(offer.price, offer.currency)} per session, paid after the professional confirms.` : null;
 }
+
+/** The cancellation rule in plain words, for the picker and the bookings page. */
+export function bookingRefundRule(cutoffHours: number): string {
+  const pro = "If the professional cancels, you get a full refund.";
+  if (cutoffHours <= 0) return `Cancel any time before the start for a full refund. ${pro}`;
+  const span = `${cutoffHours} hour${cutoffHours === 1 ? "" : "s"}`;
+  return `Cancel at least ${span} before the start for a full refund; later cancellations are not refunded. ${pro}`;
+}
+
+/** Same boundary as booking_cancel: refunded when starts_at - now >= the cut-off. */
+export function clientCancelForfeits(r: { side: string; payment_status: string | null; starts_at: string }, cutoffHours: number, now: Date = new Date()): boolean {
+  return r.side === "client" && r.payment_status === "succeeded" && new Date(r.starts_at).getTime() - now.getTime() < cutoffHours * 3_600_000;
+}

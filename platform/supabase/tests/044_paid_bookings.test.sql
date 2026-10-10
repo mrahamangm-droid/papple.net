@@ -30,7 +30,7 @@ select throws_ok($$select service_set_booking_price('cccccc44-0000-0000-0000-000
 reset role; update connected_accounts set payouts_enabled = true where org_id = 'cccccc44-0000-0000-0000-0000000000b1'; set local role authenticated;
 select lives_ok($$select service_set_booking_price('cccccc44-0000-0000-0000-0000000000b1','dddddd44-0000-0000-0000-000000000001',10000)$$, 'the owner sets a price of 100.00');
 reset role; set local role anon;
-select is(booking_price_offer('dddddd44-0000-0000-0000-000000000001'), '{"price": 10000, "currency": "USD"}'::jsonb, 'anyone can see the price of a listed service');
+select is(booking_price_offer('dddddd44-0000-0000-0000-000000000001'), '{"price": 10000, "currency": "USD", "refund_cutoff_hours": 24}'::jsonb, 'anyone can see the price of a listed service');
 reset role; set local role authenticated;
 
 -- 2. request snapshots the price

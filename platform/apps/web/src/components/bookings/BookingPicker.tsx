@@ -7,7 +7,9 @@ const btn = "rounded-md border border-neutral-400 px-3 py-1 text-sm disabled:opa
 const DAYS = 14;
 
 /** Free slots for the next two weeks, shown in the viewer's own time zone. */
-export function BookingPicker({ serviceId, minutes, orgs }: { serviceId: string; minutes: number; orgs: { id: string; name: string }[] }) {
+export function BookingPicker({ serviceId, minutes, orgs, priceLine, refundRule }: {
+  serviceId: string; minutes: number; orgs: { id: string; name: string }[]; priceLine?: string | null; refundRule?: string | null;
+}) {
   const tz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
   const [slots, setSlots] = useState<string[] | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -26,10 +28,18 @@ export function BookingPicker({ serviceId, minutes, orgs }: { serviceId: string;
   useEffect(load, [serviceId]);
 
   const days = groupSlotsByDay(slots ?? [], tz);
-  if (done) return <p role="status" className="mt-3 text-sm">Request sent. The professional will confirm or decline it; you will get a notification. See <a className="underline" href="/bookings">Bookings</a>.</p>;
+  if (done) {
+    return (
+      <p role="status" className="mt-3 text-sm">
+        Request sent. The professional will confirm or decline it; you will get a notification.
+        {priceLine ? " Once it is confirmed, pay from Bookings to keep the time." : ""} See <a className="underline" href="/bookings">Bookings</a>.
+      </p>
+    );
+  }
   return (
     <div className="mt-3 space-y-4">
       <p className="text-sm text-neutral-600 dark:text-neutral-400">{minutes}-minute slots, shown in your time zone ({tz}).</p>
+      {priceLine && <p className="text-sm"><strong>{priceLine}</strong>{refundRule ? ` ${refundRule}` : ""}</p>}
       {slots === null && <p className="text-sm">Loading open times…</p>}
       {slots !== null && days.length === 0 && !error && <p className="text-sm">No open times in the next two weeks.</p>}
       <div className="space-y-3">

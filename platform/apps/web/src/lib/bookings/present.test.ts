@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookingFailureMessage, bookingNotificationCopy, bookingPaymentState, bookingPriceLine, bookingStatusLabel, groupSlotsByDay } from "./present";
+import { bookingFailureMessage, bookingNotificationCopy, bookingPaymentState, bookingPriceLine, bookingRefundRule, clientCancelForfeits, bookingStatusLabel, groupSlotsByDay } from "./present";
 
 const NOW = new Date("2027-01-04T12:00:00Z");
 
@@ -77,5 +77,20 @@ describe("booking price copy", () => {
 describe("paid booking notifications", () => {
   it("has neutral copy for a payment", () => {
     expect(bookingNotificationCopy("booking_paid", {})?.text).toBe("A booking was paid.");
+  });
+});
+
+describe("bookingRefundRule", () => {
+  it("states the cut-off and the professional's side", () => {
+    expect(bookingRefundRule(24)).toBe("Cancel at least 24 hours before the start for a full refund; later cancellations are not refunded. If the professional cancels, you get a full refund.");
+    expect(bookingRefundRule(1)).toContain("at least 1 hour before");
+    expect(bookingRefundRule(0)).toBe("Cancel any time before the start for a full refund. If the professional cancels, you get a full refund.");
+  });
+  it("tells a client when cancelling now would not be refunded", () => {
+    const now = new Date("2027-03-01T10:00:00Z");
+    expect(clientCancelForfeits({ side: "client", payment_status: "succeeded", starts_at: "2027-03-02T09:59:00Z" }, 24, now)).toBe(true);
+    expect(clientCancelForfeits({ side: "client", payment_status: "succeeded", starts_at: "2027-03-02T10:00:00Z" }, 24, now)).toBe(false);
+    expect(clientCancelForfeits({ side: "provider", payment_status: "succeeded", starts_at: "2027-03-01T11:00:00Z" }, 24, now)).toBe(false);
+    expect(clientCancelForfeits({ side: "client", payment_status: null, starts_at: "2027-03-01T11:00:00Z" }, 24, now)).toBe(false);
   });
 });

@@ -11,6 +11,7 @@ describe("present", () => {
     expect(formatSettingValue("some.flag", true)).toBe("On");
     expect(formatSettingValue("some.flag", false)).toBe("Off");
     expect(formatSettingValue("payments.checkout_expiry_minutes", 60)).toBe("60 minutes");
+    expect(formatSettingValue("bookings.payment_window_hours", 24)).toBe("24 hours");
     expect(formatSettingValue("ai.monthly_message_limits", { free: 20 })).toBe('{"free":20}');
   });
   it("names audit actions and falls back to the raw key", () => {

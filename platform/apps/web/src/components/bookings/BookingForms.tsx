@@ -1,7 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { cancelBookingAction, decideBookingAction, saveBookingSettingsAction, setServiceBookingAction } from "@/app/(app)/booking-actions";
+import {
+  cancelBookingAction, decideBookingAction, payBookingAction, retryBookingRefundAction, saveBookingSettingsAction, setServiceBookingAction, setServicePriceAction,
+} from "@/app/(app)/booking-actions";
 import { bookingFailureMessage, type BookingFailure } from "@/lib/bookings/present";
 
 const btn = "rounded-md border border-neutral-400 px-3 py-1 text-sm disabled:opacity-50";
@@ -18,7 +20,9 @@ function useBookingAction() {
     setError("");
     try {
       const r = await fn();
-      if (r.ok) { onOk?.(); router.refresh(); } else setError(bookingFailureMessage(r.code));
+      if (r.ok) { onOk?.(); router.refresh(); return; }
+      setError(bookingFailureMessage(r.code));
+      if (r.code === "refund_failed") router.refresh(); // the cancellation itself went through
     } catch { setError(bookingFailureMessage("error")); }
   });
   return { pending, error, run };
@@ -106,16 +110,66 @@ export function DecideBookingButtons({ orgId, bookingId }: { orgId: string; book
   );
 }
 
-export function CancelBookingButton({ orgId, bookingId }: { orgId: string; bookingId: string }) {
+export function CancelBookingButton({ orgId, bookingId, warning }: { orgId: string; bookingId: string; warning?: string }) {
   const { pending, error, run } = useBookingAction();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   if (!open) return <button className={btn} onClick={() => setOpen(true)}>Cancel…</button>;
   return (
     <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); run(() => cancelBookingAction({ orgId, bookingId, reason })); }}>
+      {warning && <p className="w-full text-sm text-amber-800 dark:text-amber-300">{warning}</p>}
       <label className="text-sm">Reason (shown to the other side)<input className={field} required maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
       <button disabled={pending || !reason.trim()} className={btn}>Cancel booking</button>
       <Err error={error} />
     </form>
+  );
+}
+
+/** Price per session in major units; empty means free. Charging needs finished payout setup. */
+export function ServicePriceInput({ orgId, serviceId, price, currency, payoutsReady }: { orgId: string; serviceId: string; price: string; currency: string; payoutsReady: boolean }) {
+  const { pending, error, run } = useBookingAction();
+  const [value, setValue] = useState(price);
+  const [saved, setSaved] = useState(false);
+  if (!payoutsReady && !price) return <a className="text-sm underline" href={`/settings/payouts?org=${orgId}`}>Finish payout setup to charge</a>;
+  return (
+    <form className="inline-flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); setSaved(false); run(() => setServicePriceAction({ orgId, serviceId, price: value, currency }), () => setSaved(true)); }}>
+      <label className="text-sm">Price ({currency})
+        <input aria-label="Price per session" inputMode="decimal" placeholder="Free" className="ml-2 w-24 rounded-md border border-neutral-300 bg-transparent px-2 py-1"
+          value={value} onChange={(e) => { setValue(e.target.value); setSaved(false); }} />
+      </label>
+      <button disabled={pending} className={btn}>Save price</button>
+      {saved && <span role="status" className="text-sm">Saved.</span>}
+      <Err error={error} />
+    </form>
+  );
+}
+
+/** Opens Stripe Checkout for a confirmed booking. The database decides the amount; the webhook marks it paid. */
+export function PayBookingButton({ orgId, bookingId }: { orgId: string; bookingId: string }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState("");
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button disabled={pending} className={btn} onClick={() => start(async () => {
+        setError("");
+        try {
+          const r = await payBookingAction({ orgId, bookingId });
+          if (r.ok) window.location.assign(r.url); else setError(bookingFailureMessage(r.code));
+        } catch { setError(bookingFailureMessage("error")); }
+      })}>Pay now</button>
+      <Err error={error} />
+    </span>
+  );
+}
+
+export function RetryRefundButton({ orgId, bookingId }: { orgId: string; bookingId: string }) {
+  const { pending, error, run } = useBookingAction();
+  const [sent, setSent] = useState(false);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button disabled={pending} className={btn} onClick={() => run(() => retryBookingRefundAction({ orgId, bookingId }), () => setSent(true))}>Retry refund</button>
+      {sent && <span role="status" className="text-sm">Sent. It shows as refunded once the payment provider confirms.</span>}
+      <Err error={error} />
+    </span>
   );
 }

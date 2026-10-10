@@ -110,7 +110,8 @@ end $$;
 -- What anyone may see before booking: the price of a listed, bookable service, or null when it is free or not offered.
 create function public.booking_price_offer(p_service uuid) returns jsonb
 language sql stable security definer set search_path = public as
-$$ select jsonb_build_object('price', s.booking_price, 'currency', s.currency) from services s
+$$ select jsonb_build_object('price', s.booking_price, 'currency', s.currency,
+                             'refund_cutoff_hours', public.setting_int('bookings.client_refund_cutoff_hours', 24)) from services s
    join booking_settings b on b.org_id = s.org_id and b.enabled
    where s.id = p_service and s.booking_minutes is not null and s.booking_price is not null and public.booking_listed(p_service) $$;
 
