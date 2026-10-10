@@ -1,0 +1,49 @@
+name: security
+# Secret scanning and dependency audits for the whole repository (root app and platform/).
+# Replaces platform/.github/workflows/security.yml, which never ran (GitHub only runs the root .github/workflows).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
+permissions:
+  contents: read
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.28.0
+      GITLEAKS_SHA256: a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # scan the whole history, not just the last commit
+      - name: Install gitleaks (pinned, checksum verified)
+        run: |
+          curl -sSL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
+      # Known false positives (a docs placeholder and two test fixtures) are listed in .gitleaksignore.
+      - name: Scan for committed secrets
+        run: ./gitleaks git --no-banner --redact --exit-code 1 .
+
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: corepack enable
+      # Fail on high or critical advisories in what ships to users; dev-only tooling is reported, not blocking.
+      - name: Root app (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Platform app (production dependencies)
+        working-directory: platform/apps/web
+        run: pnpm audit --prod --audit-level high
+      - name: Dev tooling advisories (report only)
+        run: |
+          npm audit --audit-level=high || echo "::warning::root dev dependencies have advisories (see log)"
+          (cd platform/apps/web && pnpm audit --audit-level high) || echo "::warning::platform dev dependencies have advisories (see log)"

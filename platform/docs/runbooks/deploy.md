@@ -2,7 +2,7 @@
 
 **Flow:** PR → CI → Vercel preview → merge to `main` → run the **platform-migrations** workflow by hand (dry-run, then apply) on staging → verify staging → the same on production (environment approval) → Vercel production deploy.
 
-> **Note (2026-10-10):** the workflows in `platform/.github/workflows/` (`ci`, `migrations`, `deploy`, `backup`, `security`) do **not** run. GitHub only runs workflows from the repository root's `.github/workflows/`. What actually runs: root `ci.yml` (including the `platform` job), `codeql.yml`, and `platform-migrations.yml` (manual). First-time staging steps: `docs/runbooks/staging-setup.md`.
+> **Note (2026-10-10):** the workflows in `platform/.github/workflows/` (`ci`, `migrations`, `deploy`, `backup`, `security`) do **not** run. GitHub only runs workflows from the repository root's `.github/workflows/`. What actually runs: root `ci.yml` (including the `platform` job), `codeql.yml`, `security.yml` (gitleaks over the full history, plus production dependency audits for both apps), and `platform-migrations.yml` (manual). `backup.yml` still needs its R2 and database secrets before it can move to the root. First-time staging steps: `docs/runbooks/staging-setup.md`.
 
 1. Open a PR. Wait for all required checks. Review the Vercel preview (note: previews use the *staging* Supabase project).
 2. Merge. Then GitHub → Actions → **platform-migrations** → staging: `dry-run`, check the list, then `apply`.
