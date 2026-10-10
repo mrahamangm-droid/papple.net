@@ -11,6 +11,7 @@ function deps(over: Partial<BillingDeps> = {}): BillingDeps {
     canManageBilling: async () => true,
     loadPlan: async (k) => (k === "business" ? PLAN : k === "free" ? { key: "free", active: true, stripePriceId: null } : null),
     loadSubscription: async () => null,
+    trialDays: async () => 30,
     billing: {
       createSubscriptionCheckout: vi.fn(async () => ({ url: "https://checkout.stripe.com/c/pay_1" })),
       createPortalSession: vi.fn(async () => ({ url: "https://billing.stripe.com/p/session_1" })),
@@ -20,13 +21,31 @@ function deps(over: Partial<BillingDeps> = {}): BillingDeps {
   };
 }
 
+describe("free trial", () => {
+  it("gives an organization that never subscribed the free trial", async () => {
+    const d = deps();
+    await createBillingService(d).startCheckout({ orgId: ORG, planKey: "business" });
+    expect(d.billing!.createSubscriptionCheckout).toHaveBeenCalledWith(expect.objectContaining({ trialDays: 30 }));
+  });
+  it("never a second one: an organization that subscribed before pays from day one", async () => {
+    const d = deps({ loadSubscription: async () => ({ status: "canceled", customerId: "cus_1" }) });
+    await createBillingService(d).startCheckout({ orgId: ORG, planKey: "business" });
+    expect(d.billing!.createSubscriptionCheckout).toHaveBeenCalledWith(expect.objectContaining({ trialDays: 0, customerId: "cus_1" }));
+  });
+  it("can be switched off", async () => {
+    const d = deps({ trialDays: async () => 0 });
+    await createBillingService(d).startCheckout({ orgId: ORG, planKey: "business" });
+    expect(d.billing!.createSubscriptionCheckout).toHaveBeenCalledWith(expect.objectContaining({ trialDays: 0 }));
+  });
+});
+
 describe("startCheckout", () => {
   it("creates a checkout for an owner and returns the Stripe url", async () => {
     const d = deps();
     const r = await createBillingService(d).startCheckout({ orgId: ORG, planKey: "business" });
     expect(r).toEqual({ ok: true, url: "https://checkout.stripe.com/c/pay_1" });
     expect(d.billing!.createSubscriptionCheckout).toHaveBeenCalledWith({
-      orgId: ORG, priceId: "price_biz", customerId: null, idempotencyKey: expect.stringMatching(/^checkout:11111111-1111-4111-8111-111111111111:business:\d+$/),
+      orgId: ORG, priceId: "price_biz", customerId: null, trialDays: 30, idempotencyKey: expect.stringMatching(/^checkout:11111111-1111-4111-8111-111111111111:business:\d+$/),
       successUrl: "https://papple.net/settings/billing?checkout=success", cancelUrl: "https://papple.net/settings/billing?checkout=cancelled",
     });
   });

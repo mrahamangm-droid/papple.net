@@ -1,3 +1,4 @@
+import { formatMinor } from "../marketplace/present";
 import type { BillingResult } from "./service";
 
 const MESSAGES: Record<Extract<BillingResult, { ok: false }>["code"], string> = {
@@ -25,9 +26,20 @@ export function describeSubscription(s: SubscriptionView | null, now: Date, grac
       ? `The last payment failed. Paid features stay on for ${left} more day${left === 1 ? "" : "s"}; update the payment method to keep them.`
       : "The last payment failed and the grace period has ended, so the organization is on the Free plan until the payment method is updated.";
   }
+  if (s.status === "trialing" && s.periodEnd) {
+    return s.cancelAtPeriodEnd
+      ? `Free trial until ${date(s.periodEnd)}. It is cancelled, so nothing will be charged.`
+      : `Free trial until ${date(s.periodEnd)}, then the plan is charged monthly. Cancel before then and nothing is charged.`;
+  }
   if (s.status === "active" || s.status === "trialing") {
     if (!s.periodEnd) return "The subscription is active.";
     return s.cancelAtPeriodEnd ? `The subscription ends on ${date(s.periodEnd)} and will not renew.` : `The subscription renews on ${date(s.periodEnd)}.`;
   }
   return "The subscription needs attention. Open billing to review the payment method.";
+}
+
+/** The price on a plan card; leads with the free trial when this organization can still have one. */
+export function planPriceLine(p: { price_cents: number; currency: string; interval: string | null }, trialDays: number): string {
+  const price = `${formatMinor(p.price_cents, p.currency)}${p.interval ? ` per ${p.interval}` : ""}`;
+  return trialDays > 0 ? `${trialDays} days free, then ${price}` : price;
 }

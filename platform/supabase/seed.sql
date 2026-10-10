@@ -1,9 +1,9 @@
 -- Launch defaults ONLY. Every value is admin-editable at runtime; application code must not hardcode them.
 insert into public.plans (key, name, audience, price_cents, currency, interval, limits, features, sort) values
  ('free', 'Free', 'client', 0, 'USD', null, '{}', '{"marketplace_basic":true}', 0),
- ('professional_plus', 'Professional Plus', 'professional', 999, 'USD', 'month', '{}', '{}', 10),
- ('business', 'Business', 'agency', 1999, 'USD', 'month', '{}', '{}', 20),
- ('enterprise', 'Enterprise', 'enterprise', null, 'USD', null, '{}', '{"custom_pricing":true}', 30)
+ ('professional_plus', 'Professional Plus', 'professional', 2999, 'USD', 'month', '{}', '{}', 10),
+ ('business', 'Business', 'agency', 4999, 'USD', 'month', '{}', '{}', 20),
+ ('enterprise', 'Enterprise', 'enterprise', 9999, 'USD', 'month', '{}', '{}', 30)
 on conflict (key) do nothing;
 
 insert into public.platform_settings (key, value, description) values

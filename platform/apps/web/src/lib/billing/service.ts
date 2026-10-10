@@ -10,6 +10,8 @@ export interface BillingDeps {
   canManageBilling: (orgId: string) => Promise<boolean>;
   loadPlan: (key: string) => Promise<{ key: string; active: boolean; stripePriceId: string | null } | null>;
   loadSubscription: (orgId: string) => Promise<{ status: string; customerId: string | null } | null>;
+  /** The platform's free-trial length (setting billing.trial_days); 0 turns trials off. */
+  trialDays: () => Promise<number>;
   /** Null when Stripe Billing is not configured. */
   billing: BillingProvider | null;
   siteUrl: string;
@@ -71,8 +73,10 @@ export function createBillingService(deps: BillingDeps) {
         if (!plan || !plan.active || !plan.stripePriceId) return { ok: false, code: "invalid" };
         const sub = await deps.loadSubscription(orgId);
         if (sub?.customerId && LIVE.has(sub.status)) return await portal(g.billing, sub.customerId);
+        // one free trial per organization: any earlier subscription, even a cancelled one, means it was used
+        const trialDays = sub ? 0 : await deps.trialDays();
         const { url } = await g.billing.createSubscriptionCheckout({
-          orgId, priceId: plan.stripePriceId, customerId: sub?.customerId ?? null,
+          orgId, priceId: plan.stripePriceId, customerId: sub?.customerId ?? null, trialDays,
           // Stripe returns the same session for the same key: a double click or a second tab cannot open two subscriptions.
           idempotencyKey: `checkout:${orgId}:${plan.key}:${Math.floor((deps.now?.() ?? Date.now()) / IDEMPOTENCY_WINDOW_MS)}`,
           successUrl: back("?checkout=success"), cancelUrl: back("?checkout=cancelled"),

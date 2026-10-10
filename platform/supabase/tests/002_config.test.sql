@@ -16,9 +16,9 @@ insert into memberships (user_id, org_id, role) values
 -- seed values (launch defaults; all admin-editable)
 select is((select (value #>> '{}')::int from platform_settings where key='commission.professional_bps'), 500, 'seed: professional commission 500 bps');
 select is((select (value #>> '{}')::int from platform_settings where key='commission.client_bps'), 200, 'seed: client fee 200 bps');
-select is((select price_cents from plans where key='professional_plus'), 999, 'seed: Professional Plus 999 cents');
-select is((select price_cents from plans where key='business'), 1999, 'seed: Business 1999 cents');
-select is((select price_cents from plans where key='enterprise'), null, 'seed: Enterprise has no fixed price (custom)');
+select is((select price_cents from plans where key='professional_plus'), 2999, 'seed: Professional Plus 2999 cents');
+select is((select price_cents from plans where key='business'), 4999, 'seed: Business 4999 cents');
+select is((select price_cents from plans where key='enterprise'), 9999, 'seed: Enterprise 9999 cents');
 select is((select price_cents from plans where key='free'), 0, 'seed: Free plan costs 0');
 
 -- anon: pricing is public, settings are not

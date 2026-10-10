@@ -9,6 +9,7 @@ describe("settings registry", () => {
     ["commission.client_bps", 0, 10000, -1, 10001],
     ["commission.professional_bps", 0, 10000, -1, 10001],
     ["payments.checkout_expiry_minutes", 30, 1440, 29, 1441],
+    ["billing.trial_days", 0, 90, -1, 91],
     ["bookings.payment_window_hours", 1, 168, 0, 169],
     ["bookings.client_refund_cutoff_hours", 0, 720, -1, 721],
   ])("%s accepts its bounds and rejects just outside", (key, lo, hi, below, above) => {

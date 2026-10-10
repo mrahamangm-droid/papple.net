@@ -1,15 +1,15 @@
 import { AppShell } from "@/components/shell/AppShell";
 import { ChoosePlanButton, ManageBillingButton } from "@/components/billing/BillingButtons";
 import { requireCapability } from "@/lib/auth-context";
-import { describeSubscription } from "@/lib/billing/present";
-import { formatMinor } from "@/lib/marketplace/present";
+import { describeSubscription, planPriceLine } from "@/lib/billing/present";
 import { settings } from "@/lib/server";
 import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
 
-/** Which plan audiences an organization type may buy. Enterprise is by contract, never self-serve. */
+/** Which plan audiences an organization type may buy. Agencies can step up to Enterprise; enterprise organizations buy it directly. */
 const audiencesFor = (type: string): string[] =>
-  type === "client_company" ? ["client"] : type === "individual" ? ["professional"] : type === "agency" ? ["professional", "agency"] : [];
+  type === "client_company" ? ["client"] : type === "individual" ? ["professional"] : type === "agency" ? ["professional", "agency", "enterprise"]
+    : type === "enterprise" ? ["enterprise"] : [];
 
 export const metadata = { title: "Billing" };
 export const dynamic = "force-dynamic";
@@ -32,6 +32,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const planOf = new Map(effective);
   const now = new Date();
   const graceDays = await settings.getSetting("billing.grace_days", z.number().int().min(0).max(30)).catch(() => 7);
+  const trialDays = await settings.getSetting("billing.trial_days", z.number().int().min(0).max(90)).catch(() => 30);
   return (
     <AppShell ctx={ctx}>
       <h1 className="text-2xl font-semibold">Billing</h1>
@@ -53,11 +54,12 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                   {options.map((p) => (
                     <li key={p.key as string} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
                       <p className="font-medium">{p.name as string}</p>
-                      <p className="text-sm opacity-80">{formatMinor(p.price_cents as number, p.currency as string)}{p.interval ? ` per ${p.interval}` : ""}</p>
+                      {/* one trial per organization: the server gives none once any subscription existed */}
+                      <p className="text-sm opacity-80">{planPriceLine({ price_cents: p.price_cents as number, currency: p.currency as string, interval: (p.interval as string | null) ?? null }, s ? 0 : trialDays)}</p>
                       <div className="mt-2"><ChoosePlanButton orgId={o.id as string} planKey={p.key as string} label={`Choose ${p.name as string}`} /></div>
                     </li>
                   ))}
-                  {options.length === 0 && <li className="text-sm">{o.type === "enterprise" ? "Enterprise plans are arranged by contract. Contact Papple." : "No paid plans are available for this organization yet."}</li>}
+                  {options.length === 0 && <li className="text-sm">No paid plans are available for this organization yet.</li>}
                 </ul>
               ) : null}
             </li>

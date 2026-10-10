@@ -342,6 +342,7 @@ export const billingService = createBillingService({
     const { data } = await createServiceClient().from("subscriptions").select("status, stripe_customer_id").eq("org_id", orgId).maybeSingle();
     return data ? { status: data.status as string, customerId: (data.stripe_customer_id as string | null) ?? null } : null;
   },
+  trialDays: () => settings.getSetting("billing.trial_days", z.number().int().min(0).max(90)).catch(() => 30),
   get billing() { return billingProvider(); },
   siteUrl: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://papple.net").replace(/\/$/, ""),
 });
