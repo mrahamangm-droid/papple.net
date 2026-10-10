@@ -15,5 +15,5 @@ for f in supabase/migrations/*.sql; do psql -q -v ON_ERROR_STOP=1 -f "$f" >/dev/
 cov=$(psql -qAt -f scripts/check-rls-coverage.sql); if [ -n "$cov" ]; then echo "RLS COVERAGE FAILED:"; echo "$cov"; exit 1; fi; echo "RLS coverage OK"
 out=$(mktemp)
 for t in supabase/tests/*.test.sql; do echo "== $t"; psql -q -v ON_ERROR_STOP=0 -f "$t" 2>&1 | tee -a "$out"; done
-if grep -qE "^\s*not ok|Looks like you failed|ERROR:" "$out"; then echo "DB TESTS FAILED"; exit 1; fi
+if grep -qE "^\s*not ok|Looks like you failed|Looks like you planned|ERROR:" "$out"; then echo "DB TESTS FAILED"; exit 1; fi
 echo "DB TESTS PASSED: $(grep -cE "^\s*ok" "$out") assertions"

@@ -4,6 +4,10 @@ import { pickOrg } from "@/lib/approvals/org";
 import { OrgSwitcher } from "@/components/approvals/OrgSwitcher";
 import { isManager, policySummary, type SpendPolicy } from "@/lib/approvals/present";
 import { requireCapability } from "@/lib/auth-context";
+import { BudgetForm } from "@/components/budgets/BudgetForm";
+import { BudgetMeter } from "@/components/budgets/BudgetMeter";
+import { loadBudgetStatus } from "@/lib/budgets/load";
+import { budgetSummary, type BudgetSetting } from "@/lib/budgets/present";
 import { fromMinor } from "@/lib/marketplace/present";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -21,6 +25,13 @@ export default async function ApprovalSettingsPage({ searchParams }: PageProps<"
     ? await db.from("spend_policies").select("enabled, threshold_minor, currency").eq("org_id", membership.orgId).maybeSingle()
     : { data: null };
   const p = policy as SpendPolicy | null;
+  const [{ data: budget }, status] = manager
+    ? await Promise.all([
+        db.from("budgets").select("enabled, period, amount_minor, currency").eq("org_id", membership.orgId).maybeSingle(),
+        loadBudgetStatus(db, membership.orgId),
+      ])
+    : [{ data: null }, null];
+  const b = budget as BudgetSetting | null;
   return (
     <AppShell ctx={ctx}>
       <h1 className="text-2xl font-semibold">Contract approvals</h1>
@@ -36,6 +47,15 @@ export default async function ApprovalSettingsPage({ searchParams }: PageProps<"
               amount={p ? String(fromMinor(p.threshold_minor, p.currency)) : ""} currency={p?.currency ?? "USD"} />
           ) : (
             <p className="mt-4 text-sm">Only owners can change this rule.</p>
+          )}
+          <h2 className="mt-10 text-lg font-medium">Budget</h2>
+          <p className="mt-2 max-w-2xl text-sm">{budgetSummary(b)}</p>
+          <BudgetMeter status={status} />
+          {membership.role === "owner" ? (
+            <BudgetForm orgId={membership.orgId} enabled={b?.enabled ?? true} period={b?.period === "month" ? "month" : "quarter"}
+              amount={b ? String(fromMinor(b.amount_minor, b.currency)) : ""} currency={b?.currency ?? p?.currency ?? "USD"} />
+          ) : (
+            <p className="mt-4 text-sm">Only owners can change the budget.</p>
           )}
         </>
       )}

@@ -34,7 +34,7 @@ Legend: EXISTS (built and tested locally), PARTIAL, MISSING, BLOCKED.
 | Client portal | MISSING | |
 | Workflow automation engine | MISSING | |
 | Bookings, calendar, recurring services | PARTIAL | Bookings slice 1 (migration 0043): weekly hours, slot picker, confirm/decline/cancel, calendar file. No payment, calendar sync or recurring bookings. |
-| Procurement and approval chains | PARTIAL | Spend approvals (owner approval above a threshold, migration 0041). No multi-step chains, budgets or purchase orders. |
+| Procurement and approval chains | PARTIAL | Spend approvals (owner approval above a threshold, migration 0041) and budgets per month or quarter (0045). No multi-step chains or purchase orders. |
 | Webhook management for customers | MISSING | |
 | Production deployment | BLOCKED | see below |
 

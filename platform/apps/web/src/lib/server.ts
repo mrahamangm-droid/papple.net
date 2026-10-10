@@ -45,6 +45,7 @@ import { createTeamService } from "./team/service";
 import { createApprovalsService } from "./approvals/service";
 import { createBookingsService } from "./bookings/service";
 import { createBookingPayments } from "./bookings/payments";
+import { createBudgetsService } from "./budgets/service";
 import { buildInviteEmail, createInviteMailer } from "./team/email";
 import { newInviteToken } from "./team/token";
 import { createBillingService } from "./billing/service";
@@ -484,6 +485,17 @@ export const bookingPayments = (revalidate: (path: string) => void) => createBoo
 
 /** Spend approvals also run as the signed-in user: the database decides who may set the rule, decide or withdraw. */
 export const approvalsService = (revalidate: (path: string) => void) => createApprovalsService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("approvals", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
+});
+
+/** Budgets run as the signed-in user too: only owners can set one (the database checks). Same rate rule as approvals. */
+export const budgetsService = (revalidate: (path: string) => void) => createBudgetsService({
   getUserId: async () => (await getSessionUser())?.id ?? null,
   throttle: (userId) => throttle("approvals", `user:${userId}`),
   rpc: async (fn, args) => {
