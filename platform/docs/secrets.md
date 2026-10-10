@@ -11,4 +11,4 @@
 | `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD` | GitHub Environments `staging` / `production` | migrations workflow | 90 days |
 | `DATABASE_URL`, `BACKUP_PASSPHRASE` (+ R2 keys) | GitHub Environment `production` | nightly backup | 90 days; keep passphrase offline too |
 
-Rules: secrets are entered by the owner directly into GitHub/Vercel/Supabase UIs; never pasted into chat, commits, issues or logs. `.env*` is git-ignored; `.env.example` lists names only. CI runs gitleaks on every PR.
+Rules: secrets are entered by the owner directly into GitHub/Vercel/Supabase UIs; never pasted into chat, commits, issues or logs. `.env*` is git-ignored; `.env.example` lists names only. CI runs gitleaks over the full git history on every PR, push to `main` and weekly (root `.github/workflows/security.yml`); known false positives are listed in `.gitleaksignore` at the repository root.
