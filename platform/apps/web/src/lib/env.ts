@@ -26,6 +26,11 @@ const rateLimitShape = {
   UPSTASH_REDIS_REST_TOKEN: serverShape.UPSTASH_REDIS_REST_TOKEN,
 };
 
+const serviceShape = {
+  NEXT_PUBLIC_SUPABASE_URL: publicShape.NEXT_PUBLIC_SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY: serverShape.SUPABASE_SERVICE_ROLE_KEY,
+};
+
 export type ServerEnv = z.infer<z.ZodObject<typeof serverShape>>;
 export type PublicEnv = z.infer<z.ZodObject<typeof publicShape>>;
 type Raw = Record<string, string | undefined>;
@@ -46,3 +51,6 @@ export const parsePublicEnv = (raw: Raw): PublicEnv => parse(publicShape, raw) a
 
 /** Only what the rate limiter reads, so anonymous search never fails on unrelated unset config (storage, email). */
 export const parseRateLimitEnv = (raw: Raw): Pick<ServerEnv, "UPSTASH_REDIS_REST_URL" | "UPSTASH_REDIS_REST_TOKEN"> => parse(rateLimitShape, raw);
+
+/** Only what the service-role client reads, so server code that needs the database never fails on unset storage config. */
+export const parseServiceEnv = (raw: Raw): Pick<ServerEnv, "NEXT_PUBLIC_SUPABASE_URL" | "SUPABASE_SERVICE_ROLE_KEY"> => parse(serviceShape, raw);
