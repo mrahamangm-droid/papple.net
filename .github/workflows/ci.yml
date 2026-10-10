@@ -1,5 +1,7 @@
 name: CI
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -10,3 +12,20 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+
+  platform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/apps/web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # pnpm version comes from "packageManager" in package.json.
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
