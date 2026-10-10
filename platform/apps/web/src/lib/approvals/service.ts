@@ -82,7 +82,8 @@ export function createApprovalsService(deps: ApprovalsDeps) {
         if (min === null || rows.some((r) => r.min === min)) return { ok: false, code: "invalid" };
         rows.push({ min, approvals: t.approvals });
       }
-      const r = await run("spend_tiers_set", { p_org: p.data.orgId, p_tiers: rows });
+      // the database checks the currency against the rule's, so a stale page cannot scale amounts wrongly
+      const r = await run("spend_tiers_set", { p_org: p.data.orgId, p_currency: p.data.currency, p_tiers: rows });
       if (!r.ok) return r;
       deps.revalidate("/settings/approvals");
       return { ok: true };

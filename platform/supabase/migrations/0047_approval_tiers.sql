@@ -8,6 +8,7 @@ create table public.spend_tiers (
   org_id uuid not null references public.organizations (id) on delete cascade,
   min_minor int not null check (min_minor between 0 and 2147483647),
   approvals int not null check (approvals between 1 and 3),
+  currency text not null check (currency ~ '^[A-Z]{3}$'),
   primary key (org_id, min_minor)
 );
 create table public.spend_approvals (
@@ -27,37 +28,50 @@ create policy spend_tiers_select on public.spend_tiers for select to authenticat
 create policy spend_approvals_select on public.spend_approvals for select to authenticated
   using (exists (select 1 from spend_requests r where r.id = request_id and public.has_org_role(r.org_id, array['owner','admin'])));
 
--- How many different owners must approve: 1 when the rule is off or no tier matches; the largest matching tier otherwise;
--- the largest tier of all for a contract in another currency (no conversion, so err on the safe side).
+-- How many different owners must approve: 1 when the rule is off, below its threshold, or no tier matches; the largest
+-- approvals among the tiers the price reaches otherwise. A contract in another currency, or tiers saved in a currency the
+-- rule no longer uses, take the largest tier of all (no conversion, so err on the safe side).
 create function public.spend_required(p_org uuid, p_price int, p_currency text) returns int
 language sql stable security definer set search_path = public as
 $$ select case when p.org_id is null then 1
-               when p_currency <> p.currency then coalesce((select max(t.approvals) from spend_tiers t where t.org_id = p_org), 1)
+               when p_currency = p.currency and p_price < p.threshold_minor then 1
+               when p_currency <> p.currency or exists (select 1 from spend_tiers t where t.org_id = p_org and t.currency <> p.currency)
+                 then coalesce((select max(t.approvals) from spend_tiers t where t.org_id = p_org), 1)
                else coalesce((select max(t.approvals) from spend_tiers t where t.org_id = p_org and t.min_minor <= p_price), 1) end
    from (select 1) one left join spend_policies p on p.org_id = p_org and p.enabled $$;
 
-create function public.spend_tiers_set(p_org uuid, p_tiers jsonb) returns void
+create function public.spend_tiers_set(p_org uuid, p_currency text, p_tiers jsonb) returns void
 language plpgsql security definer set search_path = public as
-$$ declare v_owners int; v_before jsonb; t jsonb;
+$$ declare v_owners int; v_before jsonb; v_after jsonb; t jsonb; m record;
 begin
   if auth.uid() is null or not public.has_org_role(p_org, array['owner']) then raise exception 'not allowed' using errcode = '42501'; end if;
+  -- one change at a time per organization, so two saves cannot merge into a set nobody chose
+  perform pg_advisory_xact_lock(hashtextextended('spend-tiers:' || p_org::text, 0));
+  if not exists (select 1 from spend_policies where org_id = p_org and currency = p_currency) then
+    raise exception 'tiers are in the approval rule''s currency' using errcode = '22023'; end if;
   if p_tiers is null or jsonb_typeof(p_tiers) <> 'array' or jsonb_array_length(p_tiers) > 10 then raise exception 'invalid tiers' using errcode = '22023'; end if;
   select count(*) into v_owners from memberships where org_id = p_org and role = 'owner';
   for t in select value from jsonb_array_elements(p_tiers) loop
-    if jsonb_typeof(t->'min') <> 'number' or jsonb_typeof(t->'approvals') <> 'number'
+    if jsonb_typeof(t) <> 'object' or jsonb_typeof(t->'min') is distinct from 'number' or jsonb_typeof(t->'approvals') is distinct from 'number'
        or (t->>'min')::numeric <> trunc((t->>'min')::numeric) or (t->>'approvals')::numeric <> trunc((t->>'approvals')::numeric)
        or (t->>'min')::numeric not between 0 and 2147483647 or (t->>'approvals')::numeric not between 1 and 3 then
       raise exception 'invalid tiers' using errcode = '22023'; end if;
-    if (t->>'approvals')::int > v_owners then raise exception 'more approvals than owners' using errcode = '22023'; end if;
+    if (t->>'approvals')::numeric > v_owners then raise exception 'more approvals than owners' using errcode = '22023'; end if;
   end loop;
-  if (select count(distinct (value->>'min')::int) from jsonb_array_elements(p_tiers)) <> jsonb_array_length(p_tiers) then
+  select coalesce(jsonb_agg(jsonb_build_object('min', mn, 'approvals', ap) order by mn), '[]') into v_after
+    from (select (value->>'min')::numeric::int mn, (value->>'approvals')::numeric::int ap from jsonb_array_elements(p_tiers)) x;
+  if (select count(distinct (e->>'min')) from jsonb_array_elements(v_after) e) <> jsonb_array_length(v_after) then
     raise exception 'one tier per amount' using errcode = '22023'; end if;
   select coalesce(jsonb_agg(jsonb_build_object('min', min_minor, 'approvals', approvals) order by min_minor), '[]') into v_before from spend_tiers where org_id = p_org;
   delete from spend_tiers where org_id = p_org;
-  insert into spend_tiers (org_id, min_minor, approvals)
-  select p_org, (value->>'min')::int, (value->>'approvals')::int from jsonb_array_elements(p_tiers);
+  insert into spend_tiers (org_id, min_minor, approvals, currency)
+  select p_org, (e->>'min')::int, (e->>'approvals')::int, p_currency from jsonb_array_elements(v_after) e;
   insert into audit_log (actor_id, org_id, action, entity, entity_id, before, after, outcome, request_id)
-  values (auth.uid(), p_org, 'spend_tiers.set', 'spend_policy', p_org::text, v_before, p_tiers, 'success', gen_random_uuid()::text);
+  values (auth.uid(), p_org, 'spend_tiers.set', 'spend_policy', p_org::text, v_before, v_after, 'success', gen_random_uuid()::text);
+  -- one owner can loosen the protection: the others are always told
+  for m in select user_id from memberships where org_id = p_org and role = 'owner' and user_id <> auth.uid() loop
+    perform public.notify(m.user_id, 'spend_tiers_changed', jsonb_build_object('org_id', p_org));
+  end loop;
 end $$;
 
 -- As 0045, plus: an owner in a tier needing two or more owners creates or joins the request with their approval
@@ -65,7 +79,7 @@ end $$;
 create or replace function public.accept_contract(p_org uuid, p_contract uuid) returns text
 language plpgsql security definer set search_path = public as
 $$ declare v_c contracts%rowtype; v_sum bigint; v_pol spend_policies; v_req spend_requests; v_hash text; v_id uuid; m record;
-  v_bud budgets; v_r tstzrange; v_s record; v_reasons text[] := '{}'; v_need int; v_rid uuid;
+  v_bud budgets; v_r tstzrange; v_s record; v_reasons text[] := '{}'; v_need int; v_rid uuid; v_n int; v_new boolean := false;
 begin
   if auth.uid() is null then raise exception 'not authenticated' using errcode = '42501'; end if;
   if not public.has_org_role(p_org, array['owner','admin']) then raise exception 'not allowed' using errcode = '42501'; end if;
@@ -98,16 +112,35 @@ begin
         if v_rid is null then
           insert into spend_requests (org_id, contract_id, requested_by, price, currency, terms_hash, reasons, approvals_required)
           values (p_org, p_contract, auth.uid(), v_c.price, v_c.currency, v_hash, '{threshold}', v_need) returning id into v_rid;
+          v_new := true;
           perform public.spend_audit(p_org, 'spend_request.create', v_rid, jsonb_build_object('contract', p_contract, 'price', v_c.price, 'currency', v_c.currency, 'approvals_required', v_need));
           for m in select user_id from memberships where org_id = p_org and role = 'owner' and user_id <> auth.uid() loop
             perform public.notify(m.user_id, 'spend_approval_requested', jsonb_build_object('contract_id', p_contract, 'request_id', v_rid, 'org_id', p_org));
           end loop;
         end if;
+        select * into v_req from spend_requests where id = v_rid;
+        -- a requester never approves their own request (an admin promoted to owner since included); an owner who made the
+        -- request already gave their approval when it was created
+        if not v_new and v_req.requested_by = auth.uid() and not exists (select 1 from spend_approvals where request_id = v_rid and approver_id = auth.uid()) then
+          return 'approval_pending'; end if;
         insert into spend_approvals (request_id, approver_id) values (v_rid, auth.uid()) on conflict do nothing;
-        if (select count(*) from spend_approvals where request_id = v_rid) < v_need then return 'approval_requested'; end if;
+        get diagnostics v_n = row_count;
+        if (select count(*) from spend_approvals where request_id = v_rid) < v_need then
+          if v_n > 0 and v_req.requested_by is distinct from auth.uid() then
+            perform public.spend_audit(p_org, 'spend_request.approve_step', v_rid, jsonb_build_object('contract', p_contract, 'approver', auth.uid(), 'required', v_need));
+            if v_req.requested_by is not null then
+              perform public.notify(v_req.requested_by, 'spend_request_progress', jsonb_build_object('contract_id', p_contract, 'request_id', v_rid, 'org_id', p_org));
+            end if;
+          end if;
+          return 'approval_requested';
+        end if;
         update spend_requests set status = 'approved', decided_by = auth.uid(), decided_at = now() where id = v_rid;
         update contracts set accepted_by_client = true, client_accepted_at = now() where id = p_contract;
-        perform public.spend_audit(p_org, 'spend_request.approve', v_rid, jsonb_build_object('contract', p_contract));
+        perform public.spend_audit(p_org, 'spend_request.approve', v_rid, jsonb_build_object('contract', p_contract,
+          'approvers', (select jsonb_agg(approver_id order by created_at, approver_id) from spend_approvals where request_id = v_rid)));
+        if v_req.requested_by is not null and v_req.requested_by <> auth.uid() then
+          perform public.notify(v_req.requested_by, 'spend_request_approved', jsonb_build_object('contract_id', p_contract, 'request_id', v_rid, 'org_id', p_org));
+        end if;
         return 'accepted';
       end if;
     end if;
@@ -186,6 +219,12 @@ begin
     perform public.spend_audit(p_org, 'spend_request.lapse', p_request, jsonb_build_object('contract', v_req.contract_id));
     return 'lapsed';
   end if;
+  -- tiers raised since the request was made: it must not complete with fewer owners than the rules now ask for
+  if public.spend_required(p_org, v_c.price, v_c.currency) > v_req.approvals_required then
+    update spend_requests set status = 'lapsed', decided_by = auth.uid(), decided_at = now() where id = p_request;
+    perform public.spend_audit(p_org, 'spend_request.lapse', p_request, jsonb_build_object('contract', v_req.contract_id, 'reason', 'tiers raised'));
+    return 'lapsed';
+  end if;
   if exists (select 1 from spend_approvals where request_id = p_request and approver_id = auth.uid()) then
     raise exception 'you already approved this' using errcode = '23505'; end if;
   insert into spend_approvals (request_id, approver_id) values (p_request, auth.uid());
@@ -199,7 +238,8 @@ begin
   end if;
   update spend_requests set status = 'approved', decided_by = auth.uid(), decided_at = now() where id = p_request;
   update contracts set accepted_by_client = true, client_accepted_at = now() where id = v_req.contract_id;
-  perform public.spend_audit(p_org, 'spend_request.approve', p_request, jsonb_build_object('contract', v_req.contract_id));
+  perform public.spend_audit(p_org, 'spend_request.approve', p_request, jsonb_build_object('contract', v_req.contract_id,
+    'approvers', (select jsonb_agg(approver_id order by created_at, approver_id) from spend_approvals where request_id = p_request)));
   if v_req.requested_by is not null then
     perform public.notify(v_req.requested_by, 'spend_request_approved', jsonb_build_object('contract_id', v_req.contract_id, 'request_id', p_request, 'org_id', p_org));
   end if;
@@ -207,5 +247,5 @@ begin
 end $$;
 
 revoke execute on function public.spend_required(uuid, int, text) from public, anon, authenticated;
-revoke execute on function public.spend_tiers_set(uuid, jsonb) from public, anon;
-grant execute on function public.spend_tiers_set(uuid, jsonb) to authenticated;
+revoke execute on function public.spend_tiers_set(uuid, text, jsonb) from public, anon;
+grant execute on function public.spend_tiers_set(uuid, text, jsonb) to authenticated;

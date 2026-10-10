@@ -94,6 +94,7 @@ export function TierForm({ orgId, currency, tiers, owners }: { orgId: string; cu
   const [saved, setSaved] = useState(false);
   const set = (i: number, r: Partial<TierRow>) => { setSaved(false); setRows(rows.map((x, j) => (j === i ? { ...x, ...r } : x))); };
   const max = Math.max(1, Math.min(3, owners));
+  const tooMany = rows.some((r) => r.approvals > max);
   return (
     <form className="mt-3 max-w-md space-y-3" onSubmit={(e) => {
       e.preventDefault(); setSaved(false);
@@ -104,14 +105,15 @@ export function TierForm({ orgId, currency, tiers, owners }: { orgId: string; cu
           <label>From ({currency})<input className={field} inputMode="decimal" required value={r.min} onChange={(e) => set(i, { min: e.target.value })} placeholder="50000.00" /></label>
           <label>Owners needed
             <select className={field} value={r.approvals} onChange={(e) => set(i, { approvals: Number(e.target.value) })}>
-              {[1, 2, 3].filter((n) => n <= max).map((n) => <option key={n} value={n}>{n}</option>)}
+              {[1, 2, 3].filter((n) => n <= max || n === r.approvals).map((n) => <option key={n} value={n}>{n}{n > max ? " (more than your owners)" : ""}</option>)}
             </select>
           </label>
           <button type="button" className={btn} onClick={() => { setSaved(false); setRows(rows.filter((_, j) => j !== i)); }}>Remove</button>
         </div>
       ))}
       {rows.length < 10 && <button type="button" className={btn} onClick={() => { setSaved(false); setRows([...rows, { min: "", approvals: Math.min(2, max) }]); }}>Add tier</button>}
-      <p className="text-xs text-neutral-600 dark:text-neutral-400">The highest tier a contract reaches decides how many different owners must approve it. In a tier of two or more, an owner&apos;s own accept counts as one approval.</p>
+      {tooMany && <p role="alert" className="text-sm text-red-700 dark:text-red-400">A tier asks for more approvals than your organization has owners. Lower it before saving.</p>}
+      <p className="text-xs text-neutral-600 dark:text-neutral-400">A contract at or above the approval threshold needs the largest number of owners among the tiers it reaches. In a tier of two or more, an owner&apos;s own accept counts as one approval. Other owners are told when tiers change.</p>
       <button disabled={pending} className={btn}>Save tiers</button>
       {saved && <p role="status" className="text-sm">Saved.</p>}
       {notice && <p role="status" className="text-sm">{notice}</p>}

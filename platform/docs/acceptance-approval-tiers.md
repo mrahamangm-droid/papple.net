@@ -16,6 +16,15 @@ Legend: **VERIFIED** = observed passing in this session · **NOT VERIFIED** = ne
 | 9 | Pages still refuse signed-out visitors; build, types and lint clean | **VERIFIED (e2e anonymous + build)** | Playwright suite |
 | 10 | The screens signed in with two owners | **NOT VERIFIED** | Needs the staging run-through |
 
+## Review fixes applied (independent review, same migration 0047, before merge)
+- A request made before the tiers were raised now lapses, instead of being completed by one owner.
+- Tiers apply only at or above the rule's threshold, so a budget-only request below it can't need two owners that an owner's own accept would skip.
+- Approvals given through Accept are audited and notified like those given through Approve. The final approval's audit names every approver, so the record survives a deleted account.
+- Tier input is validated strictly (objects only, both fields, whole numbers), and the audit keeps the normalized tiers. Saves are serialized per organization. Tiers store their currency, which the server checks against the rule's; if the rule's currency changes later, the highest tier applies.
+- A requester never counts as an approver, on either path, including an admin promoted to owner.
+- Copy: "You approved; waiting for another owner", the lapsed message, the rule summary, the approvals intro and the progress notification. The tier form warns when a stored tier asks for more approvals than there are owners. Other owners are notified when tiers change.
+
 ## Known limits
+- **This guards the normal flow, not a rogue owner.** One owner can loosen the protection (clear the tiers, switch the rule off, or promote another account to owner). Every tier change is audited and the other owners are notified. Two-owner sign-off on settings and promotions would be a separate slice.
 - Approvers are owners only; no named sequential chains, delegation while away, deadlines or reminders.
 - If owners leave after a request was made, it can become impossible to complete; the page says so and an owner can reject it (it never downgrades on its own).

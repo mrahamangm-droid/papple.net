@@ -4,7 +4,7 @@ import { acceptOutcomeMessage, approvalFailureMessage, approvalNotificationCopy,
 describe("requestStatusLabel", () => {
   it.each([
     ["pending", "Waiting for an owner"], ["approved", "Approved"], ["rejected", "Rejected"],
-    ["withdrawn", "Withdrawn"], ["lapsed", "Lapsed (terms changed)"], ["nope", "Unknown"],
+    ["withdrawn", "Withdrawn"], ["lapsed", "Lapsed (terms or tiers changed)"], ["nope", "Unknown"],
   ])("%s → %s", (s, label) => expect(requestStatusLabel(s)).toBe(label));
 });
 
@@ -60,7 +60,7 @@ describe("who may act", () => {
 describe("policySummary", () => {
   it("describes an active rule in words", () => {
     expect(policySummary({ enabled: true, threshold_minor: 10000, currency: "USD" }))
-      .toBe("Contracts of $100.00 or more, or in a currency other than USD, need an owner's approval when an admin accepts them.");
+      .toBe("Contracts of $100.00 or more, or in a currency other than USD, need an owner's approval when an admin accepts them, or more owners where your tiers say so.");
   });
   it("says when there is no rule or it is switched off", () => {
     expect(policySummary(null)).toBe("No approval rule. Owners and admins accept contracts directly.");
@@ -76,7 +76,7 @@ describe("approval tiers", () => {
   it("words a partial decision", () => {
     expect(decideOutcomeMessage("partial")).toBe("Your approval is recorded. Another owner must also approve.");
     expect(decideOutcomeMessage("approved")).toBeNull();
-    expect(decideOutcomeMessage("lapsed")).toMatch(/terms changed/);
+    expect(decideOutcomeMessage("lapsed")).toBe("The terms or approval tiers changed after this request was made, so it lapsed. Accepting the contract again sends a new request.");
   });
   it("shows progress and whether it can still complete", () => {
     expect(approvalProgress({ required: 2, approvedBy: ["Ana"], eligibleLeft: 1 })).toEqual({ text: "1 of 2 owner approvals (approved by Ana)", stuck: false });
@@ -91,6 +91,7 @@ describe("approval tiers", () => {
     expect(tierSummary([], "USD")).toBe("One owner approval for every request.");
   });
   it("has copy for a progress notification", () => {
-    expect(approvalNotificationCopy("spend_request_progress", {})?.text).toBe("An owner approved your contract; another approval is still needed.");
+    expect(approvalNotificationCopy("spend_request_progress", {})?.text).toBe("An owner approved your contract; it still needs more approval.");
+    expect(approvalNotificationCopy("spend_tiers_changed", {})?.text).toBe("Another owner changed your organization's approval tiers.");
   });
 });

@@ -20,8 +20,14 @@ Large commitments need more than one person. Owners set amount tiers, for exampl
 - **Ruling: tiers cannot ask for more owners than exist.**
   - Saving a tier that needs more approvals than the organization has owners is refused.
   - If owners leave later, a request that can no longer collect enough approvals says so on the page. It stays pending: it is never silently downgraded.
+- **Ruling: tiers apply at or above the rule's threshold.** Below it, any request (for example a budget-only one) needs one owner. That matches what an owner's own accept does there.
+- **Ruling (review): a requester never counts.** Not even an admin who becomes an owner later. An owner who makes a request gives their approval when it is created.
+- **Limit (review): this guards the normal flow, not a rogue owner.**
+  - One owner can still loosen the protection: clear the tiers, switch the rule off, or promote a second account of their own to owner.
+  - Every tier change is audited and notified to the other owners, so nothing changes silently.
+  - Two-owner sign-off on settings and owner promotions would be its own slice.
 - **Success:**
-  - No single person can accept a contract in a two-owner tier, even by calling the database directly.
+  - No single person can accept a contract in a two-owner tier through accepting or approving, even by calling those functions directly. Changes to the settings are audited and notified.
   - Two owners approving at the same moment accept the contract exactly once.
   - Organizations without tiers see no change.
 

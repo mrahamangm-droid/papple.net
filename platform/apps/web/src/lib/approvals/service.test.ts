@@ -87,13 +87,13 @@ describe("setTiers", () => {
   it("turns major units into minor units and sends the whole set", async () => {
     const { svc, rpc, revalidate } = mk();
     expect(await svc.setTiers(tiers([{ min: "5000", approvals: 1 }, { min: "50000.50", approvals: 2 }]))).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith("spend_tiers_set", { p_org: ORG, p_tiers: [{ min: 500000, approvals: 1 }, { min: 5000050, approvals: 2 }] });
+    expect(rpc).toHaveBeenCalledWith("spend_tiers_set", { p_org: ORG, p_currency: "USD", p_tiers: [{ min: 500000, approvals: 1 }, { min: 5000050, approvals: 2 }] });
     expect(revalidate).toHaveBeenCalledWith("/settings/approvals");
   });
   it("allows clearing all tiers", async () => {
     const { svc, rpc } = mk();
     expect(await svc.setTiers(tiers([]))).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith("spend_tiers_set", { p_org: ORG, p_tiers: [] });
+    expect(rpc).toHaveBeenCalledWith("spend_tiers_set", { p_org: ORG, p_currency: "USD", p_tiers: [] });
   });
   it.each([
     ["extra decimals", [{ min: "10.555", approvals: 1 }]],

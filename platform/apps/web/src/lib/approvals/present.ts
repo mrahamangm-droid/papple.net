@@ -6,7 +6,7 @@ export type AcceptOutcome = "accepted" | "approval_requested" | "approval_pendin
 export type DecideOutcome = "approved" | "partial" | "rejected" | "lapsed";
 
 const LABELS: Record<string, string> = {
-  pending: "Waiting for an owner", approved: "Approved", rejected: "Rejected", withdrawn: "Withdrawn", lapsed: "Lapsed (terms changed)",
+  pending: "Waiting for an owner", approved: "Approved", rejected: "Rejected", withdrawn: "Withdrawn", lapsed: "Lapsed (terms or tiers changed)",
 };
 export const requestStatusLabel = (s: string) => LABELS[s] ?? "Unknown";
 
@@ -30,7 +30,7 @@ export function acceptOutcomeMessage(o: AcceptOutcome | undefined, isOwner = fal
 /** Shown after Approve or Reject; null when the page refresh says it all. */
 export function decideOutcomeMessage(o: string | undefined): string | null {
   if (o === "partial") return "Your approval is recorded. Another owner must also approve.";
-  if (o === "lapsed") return "The terms changed after this request was made, so it lapsed. The admin can accept again to send a new request.";
+  if (o === "lapsed") return "The terms or approval tiers changed after this request was made, so it lapsed. Accepting the contract again sends a new request.";
   return null;
 }
 
@@ -60,7 +60,8 @@ const COPY: Record<string, string> = {
   spend_approval_requested: "A contract is waiting for your approval.",
   spend_request_approved: "Your contract approval was granted.",
   spend_request_rejected: "Your contract approval was declined.",
-  spend_request_progress: "An owner approved your contract; another approval is still needed.",
+  spend_request_progress: "An owner approved your contract; it still needs more approval.",
+  spend_tiers_changed: "Another owner changed your organization's approval tiers.",
 };
 
 /** Neutral copy and link. Never an amount, so it is safe in email too. */
@@ -77,5 +78,5 @@ export interface SpendPolicy { enabled: boolean; threshold_minor: number; curren
 
 export function policySummary(p: SpendPolicy | null): string {
   if (!p || !p.enabled) return "No approval rule. Owners and admins accept contracts directly.";
-  return `Contracts of ${formatMinor(p.threshold_minor, p.currency)} or more, or in a currency other than ${p.currency}, need an owner's approval when an admin accepts them.`;
+  return `Contracts of ${formatMinor(p.threshold_minor, p.currency)} or more, or in a currency other than ${p.currency}, need an owner's approval when an admin accepts them, or more owners where your tiers say so.`;
 }

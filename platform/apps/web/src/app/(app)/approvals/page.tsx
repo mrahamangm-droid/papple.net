@@ -58,7 +58,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
     <AppShell ctx={ctx}>
       <h1 className="text-2xl font-semibold">Approvals</h1>
       <OrgSwitcher orgId={orgId} orgs={orgs} />
-      <p className="mt-2 max-w-2xl text-sm">Contracts an admin accepted that need an owner&apos;s approval under your <Link className="underline" href={`/settings/approvals?org=${orgId}`}>approval rule</Link> or budget.</p>
+      <p className="mt-2 max-w-2xl text-sm">Contracts accepted for your organization that need owners&apos; approval under your <Link className="underline" href={`/settings/approvals?org=${orgId}`}>approval rule</Link> or budget.</p>
       <BudgetMeter status={budget} />
 
       <h2 className="mt-8 text-lg font-medium">Waiting</h2>
@@ -73,7 +73,8 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
               {canDecide(role, r.requested_by, ctx.userId) && !approvedByMe(r) && <DecideButtons orgId={orgId} requestId={r.id} contractId={r.contract_id} />}
               {canWithdraw(role, r.requested_by, ctx.userId) && <WithdrawButton orgId={orgId} requestId={r.id} contractId={r.contract_id} />}
             </div>
-            {!canDecide(role, r.requested_by, ctx.userId) && <p className="text-neutral-600 dark:text-neutral-400">{role === "owner" ? "Another owner must decide your own request." : "Waiting for an owner."}</p>}
+            {approvedByMe(r) && <p className="text-neutral-600 dark:text-neutral-400">You approved; waiting for another owner.</p>}
+            {!approvedByMe(r) && !canDecide(role, r.requested_by, ctx.userId) && <p className="text-neutral-600 dark:text-neutral-400">{role === "owner" ? "Another owner must decide your own request." : "Waiting for an owner."}</p>}
           </li>
         ))}
         {(pending ?? []).length === 0 && <li className="py-3 text-sm">Nothing is waiting.</li>}

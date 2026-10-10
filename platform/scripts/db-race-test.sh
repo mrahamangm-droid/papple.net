@@ -292,7 +292,7 @@ q "insert into auth.users (id,email) values ('$U_TO1','to1@r.test'),('$U_TO2','t
      values ('dddddd99-0000-0000-0000-000000000901','eeeeee99-0000-0000-0000-000000000901','ffffff99-0000-0000-0000-000000000901','$O_TC','$O_PRO','Big one',60000,'USD',500,200);
    insert into milestones (contract_id,position,title,amount) values ('dddddd99-0000-0000-0000-000000000901',1,'All',60000);
    insert into spend_policies (org_id,enabled,threshold_minor,currency) values ('$O_TC',true,5000,'USD');
-   insert into spend_tiers (org_id,min_minor,approvals) values ('$O_TC',5000,1),('$O_TC',50000,2);"
+   insert into spend_tiers (org_id,min_minor,approvals,currency) values ('$O_TC',5000,1,'USD'),('$O_TC',50000,2,'USD');"
 as $U_TA "select accept_contract('$O_TC','dddddd99-0000-0000-0000-000000000901')"
 R29=$(q "select id from spend_requests where contract_id='dddddd99-0000-0000-0000-000000000901' and status='pending'")
 hold; as $U_TO1 "select spend_request_decide('$O_TC','$R29',true,'')" & as $U_TO2 "select spend_request_decide('$O_TC','$R29',true,'')" & wait
