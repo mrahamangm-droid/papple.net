@@ -21,6 +21,11 @@ const serverShape = {
   AI_MODEL: z.string().min(1).max(100).optional(),
 };
 
+const rateLimitShape = {
+  UPSTASH_REDIS_REST_URL: serverShape.UPSTASH_REDIS_REST_URL,
+  UPSTASH_REDIS_REST_TOKEN: serverShape.UPSTASH_REDIS_REST_TOKEN,
+};
+
 export type ServerEnv = z.infer<z.ZodObject<typeof serverShape>>;
 export type PublicEnv = z.infer<z.ZodObject<typeof publicShape>>;
 type Raw = Record<string, string | undefined>;
@@ -38,3 +43,6 @@ function parse<S extends Record<string, ZodTypeAny>>(shape: S, raw: Raw) {
 
 export const parseServerEnv = (raw: Raw): ServerEnv => parse(serverShape, raw) as ServerEnv;
 export const parsePublicEnv = (raw: Raw): PublicEnv => parse(publicShape, raw) as PublicEnv;
+
+/** Only what the rate limiter reads, so anonymous search never fails on unrelated unset config (storage, email). */
+export const parseRateLimitEnv = (raw: Raw): Pick<ServerEnv, "UPSTASH_REDIS_REST_URL" | "UPSTASH_REDIS_REST_TOKEN"> => parse(rateLimitShape, raw);
