@@ -20,7 +20,7 @@ describe("createContractsDb", () => {
     });
   });
   it("uses one rpc per lifecycle step", async () => {
-    const rpc = ok();
+    const rpc = ok("accepted");
     const db = createContractsDb(rpc);
     await db.acceptContract(U(1), U(2));
     await db.activateContract(U(2));
@@ -33,6 +33,13 @@ describe("createContractsDb", () => {
     expect(rpc.mock.calls.map((c) => c[0])).toEqual([
       "accept_contract", "activate_contract", "submit_milestone", "request_changes", "cancel_contract", "raise_dispute", "post_review", "assert_can_manage_payouts",
     ]);
+  });
+  it("returns the accept outcome, including a request sent to the owners", async () => {
+    expect(await createContractsDb(ok("approval_requested")).acceptContract(U(1), U(2))).toBe("approval_requested");
+    expect(await createContractsDb(ok("accepted")).acceptContract(U(1), U(2))).toBe("accepted");
+  });
+  it("refuses an accept outcome it does not know", async () => {
+    await expect(createContractsDb(ok("bogus")).acceptContract(U(1), U(2))).rejects.toThrow();
   });
   it("returns the approval details from approve_milestone", async () => {
     const approval = { payment_id: U(5), milestone_id: U(3), contract_id: U(2), title: "First", amount: 40000, client_fee: 800, provider_fee: 2000, client_total: 40800, application_fee: 2800, currency: "USD", previous_session: null };

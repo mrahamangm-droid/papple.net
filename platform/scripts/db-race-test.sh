@@ -166,5 +166,21 @@ check "the task limit holds under parallel creates" "$(q "select count(*) from t
 hold; for n in 1 2 3 4 5 6; do as $U_CLIENT "select file_register('$O_CLIENT','dddddd99-0000-0000-0000-0000000000c2','eeeeee99-0000-0000-0000-0000000002f$n','race$n.pdf','application/pdf',100,'orgs/$O_CLIENT/eeeeee99-0000-0000-0000-0000000002f$n.pdf','private')" & done; wait
 check "the file limit holds under parallel registers" "$(q "select count(*) from contract_files where org_id='$O_CLIENT'")" 2
 
+# 22. parallel admin accepts above the approval threshold create one spend request
+U_SO=aaaaaa99-0000-0000-0000-0000000005a1; U_SA1=aaaaaa99-0000-0000-0000-0000000005a2; U_SA2=aaaaaa99-0000-0000-0000-0000000005a3
+O_SC=cccccc99-0000-0000-0000-0000000005c1
+q "insert into auth.users (id,email) values ('$U_SO','so@r.test'),('$U_SA1','sa1@r.test'),('$U_SA2','sa2@r.test');
+   insert into organizations (id,type,name) values ('$O_SC','client_company','Spend Client');
+   insert into memberships (user_id,org_id,role) values ('$U_SO','$O_SC','owner'),('$U_SA1','$O_SC','admin'),('$U_SA2','$O_SC','admin');
+   insert into projects (id,org_id,title,description,currency,status) values ('eeeeee99-0000-0000-0000-0000000005e1','$O_SC','Spend project','Detailed description','USD','open');
+   insert into proposals (id,project_id,org_id,cover_letter,price,currency,delivery_days,status) values ('ffffff99-0000-0000-0000-0000000005f1','eeeeee99-0000-0000-0000-0000000005e1','$O_PRO','Offer',50000,'USD',10,'shortlisted');
+   insert into contracts (id,project_id,proposal_id,client_org_id,provider_org_id,title,price,currency,commission_pro_bps,commission_client_bps)
+     values ('dddddd99-0000-0000-0000-0000000005d1','eeeeee99-0000-0000-0000-0000000005e1','ffffff99-0000-0000-0000-0000000005f1','$O_SC','$O_PRO','Spend contract',50000,'USD',500,200);
+   insert into milestones (contract_id,position,title,amount) values ('dddddd99-0000-0000-0000-0000000005d1',1,'All',50000);
+   insert into spend_policies (org_id,enabled,threshold_minor,currency) values ('$O_SC',true,1000,'USD');"
+hold; for n in 1 2 3 4 5 6; do as $([ $((n % 2)) -eq 0 ] && echo $U_SA1 || echo $U_SA2) "select accept_contract('$O_SC','dddddd99-0000-0000-0000-0000000005d1')" & done; wait
+check "one pending spend request under parallel accepts" "$(q "select count(*) from spend_requests where org_id='$O_SC' and status='pending'")" 1
+check "and the contract is still not accepted" "$(q "select accepted_by_client from contracts where id='dddddd99-0000-0000-0000-0000000005d1'")" f
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }

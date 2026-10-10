@@ -16,3 +16,6 @@ Settings, feature flags and plans, an audit-log viewer, organization suspension,
 
 ## Admin console, slice 2 (Sub-project 4c)
 Moderation queue, hidden-items list, taxonomy editor and an overview page. Spec: `docs/superpowers/specs/2026-10-02-papple-admin-moderation-design.md`. What is and is not verified: `docs/acceptance-subproject-4c.md`.
+
+## Spend approvals (procurement slice 1)
+A client organization's owners can require their approval before an admin accepts a contract at or above an amount they set (`/settings/approvals`). The admin's acceptance becomes a request in `/approvals`; an owner approves (which accepts the contract) or rejects with a reason. An approval covers the exact price and milestone schedule; any change lapses it. Spec: `docs/superpowers/specs/2026-10-13-papple-spend-approvals-design.md`. What is and is not verified: `docs/acceptance-spend-approvals.md`.

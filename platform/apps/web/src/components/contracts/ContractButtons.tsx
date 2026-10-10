@@ -6,6 +6,7 @@ import {
   startPayoutOnboardingAction, submitMilestoneAction,
 } from "@/app/(app)/contract-actions";
 import { FormError, fieldClass } from "@/components/marketplace/useAction";
+import { acceptOutcomeMessage } from "@/lib/approvals/present";
 import { btn, useContractAction } from "./useContractAction";
 
 export function HireButton({ orgId, proposalId, projectId }: { orgId: string; proposalId: string; projectId: string }) {
@@ -21,13 +22,15 @@ export function HireButton({ orgId, proposalId, projectId }: { orgId: string; pr
 
 export function ContractControls({ orgId, contractId, can }: { orgId: string; contractId: string; can: { accept: boolean; activate: boolean; cancel: boolean } }) {
   const router = useRouter();
-  const { pending, error, run } = useContractAction(() => router.refresh());
+  const [notice, setNotice] = useState("");
+  const { pending, error, run } = useContractAction((r) => { setNotice(acceptOutcomeMessage(r.outcome) ?? ""); router.refresh(); });
   return (
     <div className="flex flex-wrap items-center gap-2">
       {can.accept && <button disabled={pending} onClick={() => run(() => acceptContractAction({ orgId, contractId }))} className={btn}>Accept terms</button>}
       {can.activate && <button disabled={pending} onClick={() => run(() => activateContractAction({ contractId }))} className={btn}>Start contract</button>}
       {can.cancel && <button disabled={pending} onClick={() => { if (window.confirm("Cancel this draft contract?")) run(() => cancelContractAction({ orgId, contractId, reason: "" })); }} className={btn}>Cancel draft</button>}
       <FormError error={error} />
+      {notice && <p role="status" className="text-sm">{notice}</p>}
     </div>
   );
 }

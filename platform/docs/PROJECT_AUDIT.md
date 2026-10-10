@@ -34,7 +34,7 @@ Legend: EXISTS (built and tested locally), PARTIAL, MISSING, BLOCKED.
 | Client portal | MISSING | |
 | Workflow automation engine | MISSING | |
 | Bookings, calendar, recurring services | MISSING | |
-| Procurement and approval chains | MISSING | |
+| Procurement and approval chains | PARTIAL | Spend approvals (owner approval above a threshold, migration 0041). No multi-step chains, budgets or purchase orders. |
 | Webhook management for customers | MISSING | |
 | Production deployment | BLOCKED | see below |
 

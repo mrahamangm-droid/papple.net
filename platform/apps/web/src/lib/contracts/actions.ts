@@ -2,6 +2,7 @@ import type { ZodType } from "zod";
 import { DuplicateError, InvalidInputError, LimitError, NotAllowedError } from "../marketplace/errors";
 import type { RULES } from "../ratelimit";
 import type { ContractsDb } from "./db";
+import type { AcceptOutcome } from "../approvals/present";
 import type { PaymentsServiceDb } from "../payments/service-db";
 import type { PaymentProvider } from "../payments/provider";
 import {
@@ -9,7 +10,7 @@ import {
 } from "./validators";
 
 export type ContractActionResult =
-  | { ok: true; id?: string; url?: string }
+  | { ok: true; id?: string; url?: string; outcome?: AcceptOutcome }
   | { ok: false; code: "forbidden" | "invalid" | "limit" | "duplicate" | "rate" | "error" };
 
 interface Deps {
@@ -23,7 +24,7 @@ interface Deps {
   expiryMinutes: () => Promise<number>;
 }
 
-type Outcome = { id?: string; url?: string; paths: string[] };
+type Outcome = { id?: string; url?: string; outcome?: AcceptOutcome; paths: string[] };
 
 /** Every action: parse -> authenticate -> per-user rate limit -> RPC(s) -> revalidate. Errors become codes, never raw text. */
 export function createContractActions(deps: Deps) {
@@ -38,7 +39,7 @@ export function createContractActions(deps: Deps) {
     try {
       const out = await exec(parsed.data);
       for (const path of out.paths) deps.revalidate(path); // explicit loop: forEach(fn) would pass the index as revalidatePath's 2nd argument
-      return { ok: true, id: out.id, url: out.url } as ContractActionResult;
+      return { ok: true, id: out.id, url: out.url, outcome: out.outcome } as ContractActionResult;
     } catch (e) {
       if (e instanceof NotAllowedError) return { ok: false, code: "forbidden" };
       if (e instanceof InvalidInputError) return { ok: false, code: "invalid" };
@@ -60,8 +61,8 @@ export function createContractActions(deps: Deps) {
       return { paths: page(v.contractId) };
     }),
     acceptContract: (i: unknown) => run(contractRef, i, "contract", "contract:", async (v) => {
-      await deps.db.acceptContract(v.orgId, v.contractId);
-      return { paths: page(v.contractId) };
+      const outcome = await deps.db.acceptContract(v.orgId, v.contractId);
+      return { outcome, paths: page(v.contractId) };
     }),
     activateContract: (i: unknown) => run(activateInput, i, "contract", "contract:", async (v) => {
       await deps.db.activateContract(v.contractId);
