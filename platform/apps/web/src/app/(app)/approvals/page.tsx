@@ -3,7 +3,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { DecideButtons, WithdrawButton } from "@/components/approvals/ApprovalForms";
 import { pickOrg } from "@/lib/approvals/org";
 import { OrgSwitcher } from "@/components/approvals/OrgSwitcher";
-import { canDecide, canWithdraw, isManager, requestStatusLabel } from "@/lib/approvals/present";
+import { approvalProgress, canDecide, canWithdraw, isManager, requestStatusLabel } from "@/lib/approvals/present";
 import { requireCapability } from "@/lib/auth-context";
 import { BudgetMeter } from "@/components/budgets/BudgetMeter";
 import { loadBudgetStatus } from "@/lib/budgets/load";
@@ -14,8 +14,9 @@ import { createServerSupabase } from "@/lib/supabase/server";
 export const metadata = { title: "Approvals" };
 export const dynamic = "force-dynamic";
 
-interface Row { id: string; contract_id: string; requested_by: string | null; status: string; price: number; currency: string; note: string; created_at: string; decided_at: string | null; reasons: string[] | null; contracts: { title: string } | null }
-const COLS = "id, contract_id, requested_by, status, price, currency, note, created_at, decided_at, reasons, contracts(title)";
+interface Row { id: string; contract_id: string; requested_by: string | null; status: string; price: number; currency: string; note: string; created_at: string; decided_at: string | null; reasons: string[] | null; approvals_required: number | null;
+  spend_approvals: { approver_id: string }[] | null; contracts: { title: string } | null }
+const COLS = "id, contract_id, requested_by, status, price, currency, note, created_at, decided_at, reasons, approvals_required, spend_approvals(approver_id), contracts(title)";
 
 export default async function ApprovalsPage({ searchParams }: PageProps<"/approvals">) {
   const ctx = await requireCapability("org.read");
@@ -40,7 +41,16 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
     loadBudgetStatus(db, orgId),
   ]);
   const why = (r: Row) => requestReasonLabels(r.reasons ?? []).join(" · ");
-  const names = new Map(((members ?? []) as { user_id: string; email: string; display_name: string | null }[]).map((m) => [m.user_id, m.display_name || m.email]));
+  const team = (members ?? []) as { user_id: string; email: string; display_name: string | null; role: string }[];
+  const names = new Map(team.map((m) => [m.user_id, m.display_name || m.email]));
+  const ownerIds = team.filter((m) => m.role === "owner").map((m) => m.user_id);
+  const progress = (r: Row) => {
+    const approved = (r.spend_approvals ?? []).map((a) => a.approver_id);
+    // owners who could still approve: not the requester, not already approved
+    const left = ownerIds.filter((o) => o !== r.requested_by && !approved.includes(o)).length;
+    return approvalProgress({ required: r.approvals_required ?? 1, approvedBy: approved.map((a) => (a === ctx.userId ? "you" : names.get(a) ?? "a former owner")), eligibleLeft: left });
+  };
+  const approvedByMe = (r: Row) => (r.spend_approvals ?? []).some((a) => a.approver_id === ctx.userId);
   const who = (id: string | null) => (id === ctx.userId ? "you" : (id && names.get(id)) || "a former member");
   const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB");
   const title = (r: Row) => <Link className="underline" href={`/contracts/${r.contract_id}`}>{r.contracts?.title ?? "Contract"}</Link>;
@@ -48,7 +58,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
     <AppShell ctx={ctx}>
       <h1 className="text-2xl font-semibold">Approvals</h1>
       <OrgSwitcher orgId={orgId} orgs={orgs} />
-      <p className="mt-2 max-w-2xl text-sm">Contracts an admin accepted that need an owner&apos;s approval under your <Link className="underline" href={`/settings/approvals?org=${orgId}`}>approval rule</Link> or budget.</p>
+      <p className="mt-2 max-w-2xl text-sm">Contracts accepted for your organization that need owners&apos; approval under your <Link className="underline" href={`/settings/approvals?org=${orgId}`}>approval rule</Link> or budget.</p>
       <BudgetMeter status={budget} />
 
       <h2 className="mt-8 text-lg font-medium">Waiting</h2>
@@ -57,12 +67,14 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
           <li key={r.id} className="space-y-2 py-3 text-sm">
             <p>{title(r)}: <strong>{formatMinor(r.price, r.currency)}</strong>, requested by {who(r.requested_by)} on {day(r.created_at)}</p>
             {why(r) && <p className="text-neutral-600 dark:text-neutral-400">Why: {why(r)}</p>}
+            <p className={progress(r).stuck ? "text-red-700 dark:text-red-400" : "text-neutral-600 dark:text-neutral-400"}>{progress(r).text}</p>
             {approveBudgetWarning(budget, r.price, r.currency) && <p className="text-amber-800 dark:text-amber-300">{approveBudgetWarning(budget, r.price, r.currency)}</p>}
             <div className="flex flex-wrap gap-4">
-              {canDecide(role, r.requested_by, ctx.userId) && <DecideButtons orgId={orgId} requestId={r.id} contractId={r.contract_id} />}
+              {canDecide(role, r.requested_by, ctx.userId) && !approvedByMe(r) && <DecideButtons orgId={orgId} requestId={r.id} contractId={r.contract_id} />}
               {canWithdraw(role, r.requested_by, ctx.userId) && <WithdrawButton orgId={orgId} requestId={r.id} contractId={r.contract_id} />}
             </div>
-            {!canDecide(role, r.requested_by, ctx.userId) && <p className="text-neutral-600 dark:text-neutral-400">{role === "owner" ? "Another owner must decide your own request." : "Waiting for an owner."}</p>}
+            {approvedByMe(r) && <p className="text-neutral-600 dark:text-neutral-400">You approved; waiting for another owner.</p>}
+            {!approvedByMe(r) && !canDecide(role, r.requested_by, ctx.userId) && <p className="text-neutral-600 dark:text-neutral-400">{role === "owner" ? "Another owner must decide your own request." : "Waiting for an owner."}</p>}
           </li>
         ))}
         {(pending ?? []).length === 0 && <li className="py-3 text-sm">Nothing is waiting.</li>}

@@ -3,10 +3,10 @@ import { isValidUuid } from "../marketplace/validators";
 
 export type ApprovalFailure = "forbidden" | "invalid" | "duplicate" | "stale" | "rate" | "error";
 export type AcceptOutcome = "accepted" | "approval_requested" | "approval_pending";
-export type DecideOutcome = "approved" | "rejected" | "lapsed";
+export type DecideOutcome = "approved" | "partial" | "rejected" | "lapsed";
 
 const LABELS: Record<string, string> = {
-  pending: "Waiting for an owner", approved: "Approved", rejected: "Rejected", withdrawn: "Withdrawn", lapsed: "Lapsed (terms changed)",
+  pending: "Waiting for an owner", approved: "Approved", rejected: "Rejected", withdrawn: "Withdrawn", lapsed: "Lapsed (terms or tiers changed)",
 };
 export const requestStatusLabel = (s: string) => LABELS[s] ?? "Unknown";
 
@@ -20,9 +20,35 @@ const MESSAGES: Record<ApprovalFailure, string> = {
 };
 export const approvalFailureMessage = (code: ApprovalFailure): string => MESSAGES[code] ?? MESSAGES.error;
 
-/** What to tell an admin after "Accept terms" when the database sent the contract to the owners instead. */
-export function acceptOutcomeMessage(o: AcceptOutcome | undefined): string | null {
-  return o === "approval_requested" || o === "approval_pending" ? "Sent to your organization's owners for approval." : null;
+/** What to tell someone after "Accept terms" when the database sent the contract for approval instead. An owner in a tier
+ *  that needs two or more owners has only given the first approval. */
+export function acceptOutcomeMessage(o: AcceptOutcome | undefined, isOwner = false): string | null {
+  if (o !== "approval_requested" && o !== "approval_pending") return null;
+  return isOwner ? "Your approval is recorded. Another owner must approve before the contract is accepted." : "Sent to your organization's owners for approval.";
+}
+
+/** Shown after Approve or Reject; null when the page refresh says it all. */
+export function decideOutcomeMessage(o: string | undefined): string | null {
+  if (o === "partial") return "Your approval is recorded. Another owner must also approve.";
+  if (o === "lapsed") return "The terms or approval tiers changed after this request was made, so it lapsed. Accepting the contract again sends a new request.";
+  return null;
+}
+
+/** "1 of 2 owner approvals"; stuck when the owners who could still approve are too few to finish (it never downgrades). */
+export function approvalProgress(p: { required: number; approvedBy: string[]; eligibleLeft: number }): { text: string; stuck: boolean } {
+  const got = p.approvedBy.length;
+  const stuck = got + p.eligibleLeft < p.required;
+  const base = got === 0
+    ? `Needs ${p.required} owner approval${p.required === 1 ? "" : "s"}`
+    : `${got} of ${p.required} owner approvals (approved by ${p.approvedBy.join(", ")})`;
+  return { text: stuck ? `${base}. It cannot be completed: not enough owners are left to approve.` : base, stuck };
+}
+
+export interface SpendTier { min_minor: number; approvals: number }
+export function tierSummary(tiers: SpendTier[], currency: string): string {
+  if (tiers.length === 0) return "One owner approval for every request.";
+  return [...tiers].sort((a, b) => a.min_minor - b.min_minor)
+    .map((t) => `From ${formatMinor(t.min_minor, currency)}: ${t.approvals === 1 ? "1 owner approval" : `${t.approvals} different owners`}.`).join(" ");
 }
 
 /** The database decides; these only choose which buttons to show. */
@@ -34,6 +60,8 @@ const COPY: Record<string, string> = {
   spend_approval_requested: "A contract is waiting for your approval.",
   spend_request_approved: "Your contract approval was granted.",
   spend_request_rejected: "Your contract approval was declined.",
+  spend_request_progress: "An owner approved your contract; it still needs more approval.",
+  spend_tiers_changed: "Another owner changed your organization's approval tiers.",
 };
 
 /** Neutral copy and link. Never an amount, so it is safe in email too. */
@@ -50,5 +78,5 @@ export interface SpendPolicy { enabled: boolean; threshold_minor: number; curren
 
 export function policySummary(p: SpendPolicy | null): string {
   if (!p || !p.enabled) return "No approval rule. Owners and admins accept contracts directly.";
-  return `Contracts of ${formatMinor(p.threshold_minor, p.currency)} or more, or in a currency other than ${p.currency}, need an owner's approval when an admin accepts them.`;
+  return `Contracts of ${formatMinor(p.threshold_minor, p.currency)} or more, or in a currency other than ${p.currency}, need an owner's approval when an admin accepts them, or more owners where your tiers say so.`;
 }
