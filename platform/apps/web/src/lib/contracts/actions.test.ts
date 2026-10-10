@@ -11,7 +11,7 @@ const approval: Approval = {
 
 function setup(over: { user?: { userId: string } | null; allow?: boolean } = {}) {
   const db = {
-    hire: vi.fn(async () => U(9)), setMilestones: vi.fn(async () => undefined), acceptContract: vi.fn(async () => undefined),
+    hire: vi.fn(async () => U(9)), setMilestones: vi.fn(async () => undefined), acceptContract: vi.fn(async (_o: string, _c: string) => "accepted" as "accepted" | "approval_requested" | "approval_pending"),
     activateContract: vi.fn(async () => undefined), submitMilestone: vi.fn(async () => undefined), requestChanges: vi.fn(async () => undefined),
     cancelContract: vi.fn(async () => undefined), approveMilestone: vi.fn(async () => approval), raiseDispute: vi.fn(async () => U(8)),
     postReview: vi.fn(async () => U(7)), assertCanManagePayouts: vi.fn(async () => undefined),
@@ -79,6 +79,12 @@ describe("contract actions: shared behaviour", () => {
 
 describe("approveAndPay", () => {
   const input = { orgId: U(1), contractId: U(2), milestoneId: U(3) };
+  it("passes an approval outcome through from accept and refreshes the contract", async () => {
+    const { actions, db, revalidate } = setup();
+    db.acceptContract.mockResolvedValueOnce("approval_pending");
+    expect(await actions.acceptContract({ orgId: U(1), contractId: U(2) })).toEqual({ ok: true, outcome: "approval_pending" });
+    expect(revalidate).toHaveBeenCalledWith(`/contracts/${U(2)}`);
+  });
   it("approves, opens a destination-charge checkout and returns its url", async () => {
     const { actions, db, service, provider, throttle } = setup();
     const r = await actions.approveAndPay(input);

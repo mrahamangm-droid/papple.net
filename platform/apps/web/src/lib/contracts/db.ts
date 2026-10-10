@@ -1,4 +1,5 @@
-import { mapDbError } from "../marketplace/errors";
+import { MarketplaceError, mapDbError } from "../marketplace/errors";
+import type { AcceptOutcome } from "../approvals/present";
 import type { Rpc } from "../marketplace/db";
 
 export interface MilestoneInput { title: string; description: string; amount: number; dueDate?: string }
@@ -21,7 +22,12 @@ export function createContractsDb(rpc: Rpc) {
       p_org: i.orgId, p_contract: i.contractId,
       p_items: i.items.map((m) => ({ title: m.title, description: m.description, amount: m.amount, due_date: m.dueDate ?? null })),
     }),
-    acceptContract: (orgId: string, contractId: string) => call("accept_contract", { p_org: orgId, p_contract: contractId }),
+    /** "accepted", or the client organization's approval rule sent it to the owners instead. */
+    acceptContract: async (orgId: string, contractId: string): Promise<AcceptOutcome> => {
+      const out = await call<string>("accept_contract", { p_org: orgId, p_contract: contractId });
+      if (out !== "accepted" && out !== "approval_requested" && out !== "approval_pending") throw new MarketplaceError();
+      return out;
+    },
     activateContract: (contractId: string) => call("activate_contract", { p_contract: contractId }),
     submitMilestone: (orgId: string, milestoneId: string) => call("submit_milestone", { p_org: orgId, p_milestone: milestoneId }),
     requestChanges: (orgId: string, milestoneId: string, note: string) => call("request_changes", { p_org: orgId, p_milestone: milestoneId, p_note: note }),
