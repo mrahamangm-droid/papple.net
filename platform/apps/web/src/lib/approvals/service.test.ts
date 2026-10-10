@@ -59,6 +59,10 @@ describe("decide", () => {
     expect(revalidate).toHaveBeenCalledWith("/approvals");
     expect(revalidate).toHaveBeenCalledWith(`/contracts/${CON}`);
   });
+  it("reports a request someone else already decided", async () => {
+    expect(await mk(async () => ({ data: null, error: { code: "55000" } })).svc.decide({ orgId: ORG, requestId: REQ, approve: true, note: "" })).toEqual({ ok: false, code: "stale" });
+    expect(await mk(async () => ({ data: null, error: { code: "55000" } })).svc.withdraw({ orgId: ORG, requestId: REQ })).toEqual({ ok: false, code: "stale" });
+  });
   it("treats an unexpected answer as an error", async () => {
     expect(await mk(async () => ({ data: "maybe", error: null })).svc.decide({ orgId: ORG, requestId: REQ, approve: true, note: "" })).toEqual({ ok: false, code: "error" });
   });

@@ -182,5 +182,18 @@ hold; for n in 1 2 3 4 5 6; do as $([ $((n % 2)) -eq 0 ] && echo $U_SA1 || echo 
 check "one pending spend request under parallel accepts" "$(q "select count(*) from spend_requests where org_id='$O_SC' and status='pending'")" 1
 check "and the contract is still not accepted" "$(q "select accepted_by_client from contracts where id='dddddd99-0000-0000-0000-0000000005d1'")" f
 
+# 23. an owner approving while an admin re-accepts changed terms never deadlocks (both lock the contract first)
+q "update spend_policies set threshold_minor = 1000 where org_id = '$O_SC'"
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  q "update spend_requests set status = 'withdrawn' where org_id = '$O_SC' and status = 'pending'; update contracts set accepted_by_client = false where id = 'dddddd99-0000-0000-0000-0000000005d1'"
+  as $U_SA1 "select accept_contract('$O_SC','dddddd99-0000-0000-0000-0000000005d1')"
+  q "update milestones set title = 'All $i' where contract_id = 'dddddd99-0000-0000-0000-0000000005d1'"
+  hold
+  as $U_SO "select spend_request_decide('$O_SC', (select id from spend_requests where org_id = '$O_SC' and status = 'pending'), true, '')" &
+  as $U_SA2 "select accept_contract('$O_SC','dddddd99-0000-0000-0000-0000000005d1')" &
+  wait
+done
+check "no deadlock between approve and re-accept" "$(grep -c 'deadlock detected' /tmp/race-errors.log)" 0
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }

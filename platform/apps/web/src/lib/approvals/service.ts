@@ -29,7 +29,7 @@ const withdrawInput = z.object({ orgId: id, requestId: id, contractId: id.option
 const OUTCOMES: readonly DecideOutcome[] = ["approved", "rejected", "lapsed"];
 
 const failure = (code?: string): ApprovalFailure =>
-  code === "42501" ? "forbidden" : code === "22023" ? "invalid" : code === "23505" ? "duplicate" : "error";
+  code === "42501" ? "forbidden" : code === "22023" ? "invalid" : code === "23505" ? "duplicate" : code === "55000" ? "stale" : "error";
 
 /** Major-unit text -> minor units, or null when it has more decimals than the currency or exceeds the database range. */
 function thresholdMinor(amount: string, currency: string): number | null {
