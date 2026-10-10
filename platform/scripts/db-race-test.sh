@@ -280,5 +280,24 @@ wait
 check "an admin accepting during an owner's approval counts it" "$(q "select count(*) from spend_requests where contract_id='dddddd99-0000-0000-0000-000000000802' and status='pending' and reasons='{budget}'")" 1
 check "and only the approved contract is accepted" "$(q "select string_agg(title, ',') from contracts where client_org_id='$O_BC2' and accepted_by_client")" "Approved one"
 
+# 29. two owners approving a two-owner request at the same moment: accepted exactly once, both approvals kept
+#     (each decision locks the contract first, so the second one counts the first)
+O_TC=cccccc99-0000-0000-0000-0000000009c1; U_TO1=aaaaaa99-0000-0000-0000-0000000009a1; U_TO2=aaaaaa99-0000-0000-0000-0000000009a2; U_TA=aaaaaa99-0000-0000-0000-0000000009a3
+q "insert into auth.users (id,email) values ('$U_TO1','to1@r.test'),('$U_TO2','to2@r.test'),('$U_TA','ta@r.test');
+   insert into organizations (id,type,name) values ('$O_TC','client_company','Tier Client');
+   insert into memberships (user_id,org_id,role) values ('$U_TO1','$O_TC','owner'),('$U_TO2','$O_TC','owner'),('$U_TA','$O_TC','admin');
+   insert into projects (id,org_id,title,description,currency,status) values ('eeeeee99-0000-0000-0000-000000000901','$O_TC','Tier project','Detailed description','USD','open');
+   insert into proposals (id,project_id,org_id,cover_letter,price,currency,delivery_days,status) values ('ffffff99-0000-0000-0000-000000000901','eeeeee99-0000-0000-0000-000000000901','$O_PRO','Offer',1000,'USD',10,'shortlisted');
+   insert into contracts (id,project_id,proposal_id,client_org_id,provider_org_id,title,price,currency,commission_pro_bps,commission_client_bps)
+     values ('dddddd99-0000-0000-0000-000000000901','eeeeee99-0000-0000-0000-000000000901','ffffff99-0000-0000-0000-000000000901','$O_TC','$O_PRO','Big one',60000,'USD',500,200);
+   insert into milestones (contract_id,position,title,amount) values ('dddddd99-0000-0000-0000-000000000901',1,'All',60000);
+   insert into spend_policies (org_id,enabled,threshold_minor,currency) values ('$O_TC',true,5000,'USD');
+   insert into spend_tiers (org_id,min_minor,approvals) values ('$O_TC',5000,1),('$O_TC',50000,2);"
+as $U_TA "select accept_contract('$O_TC','dddddd99-0000-0000-0000-000000000901')"
+R29=$(q "select id from spend_requests where contract_id='dddddd99-0000-0000-0000-000000000901' and status='pending'")
+hold; as $U_TO1 "select spend_request_decide('$O_TC','$R29',true,'')" & as $U_TO2 "select spend_request_decide('$O_TC','$R29',true,'')" & wait
+check "two owners approving at once complete a two-owner request" "$(q "select status || ' ' || (select count(*) from spend_approvals where request_id='$R29') from spend_requests where id='$R29'")" "approved 2"
+check "and the contract is accepted once" "$(q "select accepted_by_client from contracts where id='dddddd99-0000-0000-0000-000000000901'")" t
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
