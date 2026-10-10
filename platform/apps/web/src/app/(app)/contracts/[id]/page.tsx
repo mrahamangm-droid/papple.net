@@ -10,6 +10,9 @@ import { ContractStatusBadge } from "@/components/contracts/ContractStatusBadge"
 import { MilestoneList, type MilestoneRow } from "@/components/contracts/MilestoneList";
 import { PaymentNotice } from "@/components/contracts/PaymentNotice";
 import { requireCapability } from "@/lib/auth-context";
+import { BudgetMeter } from "@/components/budgets/BudgetMeter";
+import { loadBudgetStatus } from "@/lib/budgets/load";
+import { acceptBudgetWarning } from "@/lib/budgets/present";
 import { contractActions, milestoneActions, milestoneTotal, viewerSide } from "@/lib/contracts/present";
 import { formatMinor } from "@/lib/marketplace/present";
 import { isValidUuid } from "@/lib/marketplace/validators";
@@ -49,6 +52,9 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
     : null;
   const currency = c.currency as string;
   const openDispute = (disputes ?? []).find((d) => d.status === "open");
+  // before the client accepts: how this contract sits against the organization's budget (the database decides on Accept)
+  const budget = view?.side === "client" && c.status === "draft" && can?.accept ? await loadBudgetStatus(db, view.orgId) : null;
+  const budgetWarning = view ? acceptBudgetWarning(budget, c.price as number, currency, view.role === "owner") : null;
 
   return (
     <AppShell ctx={ctx}>
@@ -60,7 +66,7 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
       {who?.slug && <p className="mt-1 text-sm"><Link className="underline" href={`/p/${who.slug as string}`}>View professional profile</Link></p>}
       {(approvalWait ?? []).length > 0 && (
         <p role="status" className="mt-3 rounded-md border border-amber-400 px-3 py-2 text-sm">
-          Awaiting owner approval. An admin accepted these terms and your organization&apos;s rule needs an owner to approve them. <Link className="underline" href={`/approvals?org=${c.client_org_id as string}`}>Open approvals</Link>
+          Awaiting owner approval. An admin accepted these terms and your organization&apos;s approval rule or budget needs an owner to approve them. <Link className="underline" href={`/approvals?org=${c.client_org_id as string}`}>Open approvals</Link>
         </p>
       )}
       {view && <div className="mt-4 max-w-2xl"><PaymentNotice side={view.side} /></div>}
@@ -112,6 +118,8 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
 
       {view && can && (can.accept || can.activate || can.cancel) && (
         <section className="mt-6" aria-label="Contract actions">
+          <BudgetMeter status={budget} />
+          {budgetWarning && <p role="status" className="mt-2 max-w-2xl rounded-md border border-amber-400 px-3 py-2 text-sm">{budgetWarning}</p>}
           <ContractControls orgId={view.orgId} contractId={id} can={can} />
           {c.status === "draft" && view.side === "provider" && <p className="mt-2 text-sm">To start, you must finish <Link className="underline" href="/settings/payouts">payout setup</Link>.</p>}
         </section>

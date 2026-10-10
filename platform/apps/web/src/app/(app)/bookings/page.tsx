@@ -7,6 +7,8 @@ import { pickOrg } from "@/lib/approvals/org";
 import { requireCapability } from "@/lib/auth-context";
 import { bookingPaymentState, bookingRefundRule, bookingStatusLabel, clientCancelForfeits } from "@/lib/bookings/present";
 import { settings } from "@/lib/server";
+import { loadBudgetStatus } from "@/lib/budgets/load";
+import { bookingBudgetWarning } from "@/lib/budgets/present";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = { title: "Bookings" };
@@ -33,6 +35,8 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
   const now = new Date();
   const cutoff = await refundCutoffHours();
   const hasPaid = rows.some((r) => r.price != null);
+  const due = (r: Row) => bookingPaymentState(r, now)?.kind === "due";
+  const budget = canAct && rows.some((r) => r.side === "client" && due(r)) ? await loadBudgetStatus(db, orgId) : null;
   const live = (r: Row) => (r.status === "pending" || r.status === "confirmed") && new Date(r.starts_at) > now;
   const section = (title: string, side: Row["side"], empty: string) => {
     const mine = rows.filter((r) => r.side === side);
@@ -54,6 +58,9 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
                   <p className="flex flex-wrap items-center gap-2">
                     <span>{pay.text}{pay.payBy && <> <LocalTime iso={pay.payBy} /></>}{pay.kind === "due" && side === "provider" ? " (the time is released if it is not paid)" : ""}</span>
                     {canAct && side === "client" && pay.kind === "due" && <PayBookingButton orgId={orgId} bookingId={r.id} />}
+                    {canAct && side === "client" && pay.kind === "due" && r.price != null && r.currency && bookingBudgetWarning(budget, r.price, r.currency) && (
+                      <span className="w-full text-amber-800 dark:text-amber-300">{bookingBudgetWarning(budget, r.price, r.currency)}</span>
+                    )}
                     {canAct && pay.kind === "refund_pending" && <RetryRefundButton orgId={orgId} bookingId={r.id} />}
                   </p>
                 );
