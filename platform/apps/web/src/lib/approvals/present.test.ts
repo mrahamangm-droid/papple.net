@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptOutcomeMessage, approvalFailureMessage, approvalNotificationCopy, canDecide, canWithdraw, requestStatusLabel } from "./present";
+import { acceptOutcomeMessage, approvalFailureMessage, approvalNotificationCopy, canDecide, canWithdraw, policySummary, requestStatusLabel } from "./present";
 
 describe("requestStatusLabel", () => {
   it.each([
@@ -47,5 +47,16 @@ describe("who may act", () => {
   it("has plain failure messages", () => {
     expect(approvalFailureMessage("forbidden")).toMatch(/not allowed/i);
     expect(approvalFailureMessage("rate")).toMatch(/too many/i);
+  });
+});
+
+describe("policySummary", () => {
+  it("describes an active rule in words", () => {
+    expect(policySummary({ enabled: true, threshold_minor: 10000, currency: "USD" }))
+      .toBe("Contracts of $100.00 or more, or in a currency other than USD, need an owner's approval when an admin accepts them.");
+  });
+  it("says when there is no rule or it is switched off", () => {
+    expect(policySummary(null)).toBe("No approval rule. Owners and admins accept contracts directly.");
+    expect(policySummary({ enabled: false, threshold_minor: 10000, currency: "USD" })).toBe("No approval rule. Owners and admins accept contracts directly.");
   });
 });

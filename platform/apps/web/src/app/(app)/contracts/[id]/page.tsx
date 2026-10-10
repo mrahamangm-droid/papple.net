@@ -28,13 +28,15 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
     .select("id, title, price, currency, status, client_org_id, provider_org_id, accepted_by_client, accepted_by_provider, proposal_id, project_id, cancelled_reason").eq("id", id).maybeSingle();
   if (!c) notFound(); // RLS hides other organizations' contracts, so this is also the not-allowed case
 
-  const [{ data: ms }, { data: disputes }, { data: reviews }, { data: who }, { data: invs }, { data: pays }] = await Promise.all([
+  const [{ data: ms }, { data: disputes }, { data: reviews }, { data: who }, { data: invs }, { data: pays }, { data: approvalWait }] = await Promise.all([
     db.from("milestones").select("id, position, title, description, amount, due_date, status, change_note").eq("contract_id", id).order("position"),
     db.from("disputes").select("id, status, reason, opened_at, resolution").eq("contract_id", id).order("opened_at", { ascending: false }),
     db.from("reviews").select("author_org_id, subject_org_id, rating, comment").eq("contract_id", id),
     db.from("proposal_providers").select("headline, slug").eq("proposal_id", c.proposal_id as string).maybeSingle(),
     db.from("invoices").select("id, milestone_id, kind, credits_invoice_id, number").eq("contract_id", id),
     db.from("payments").select("milestone_id, status").eq("contract_id", id),
+    // RLS returns rows only to the client organization's owners and admins
+    db.from("spend_requests").select("id").eq("contract_id", id).eq("status", "pending").limit(1),
   ]);
   const invoiceOf = new Map((invs ?? []).filter((i) => i.kind === "invoice").map((i) => [i.milestone_id as string, i]));
   const creditOf = new Map((invs ?? []).filter((i) => i.kind === "credit_note").map((i) => [i.credits_invoice_id as string, i]));
@@ -56,6 +58,11 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
         {who?.headline ? ` · ${who.headline as string}` : ""}
       </p>
       {who?.slug && <p className="mt-1 text-sm"><Link className="underline" href={`/p/${who.slug as string}`}>View professional profile</Link></p>}
+      {(approvalWait ?? []).length > 0 && (
+        <p role="status" className="mt-3 rounded-md border border-amber-400 px-3 py-2 text-sm">
+          Awaiting owner approval. An admin accepted these terms and your organization&apos;s rule needs an owner to approve them. <Link className="underline" href={`/approvals?org=${c.client_org_id as string}`}>Open approvals</Link>
+        </p>
+      )}
       {view && <div className="mt-4 max-w-2xl"><PaymentNotice side={view.side} /></div>}
       {view && <p className="mt-2 text-sm"><Link className="underline" href={`/contracts/${id}/work`}>Tasks, time and files</Link></p>}
 

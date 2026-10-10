@@ -1,3 +1,5 @@
+import { formatMinor } from "../marketplace/present";
+
 export type ApprovalFailure = "forbidden" | "invalid" | "duplicate" | "rate" | "error";
 export type AcceptOutcome = "accepted" | "approval_requested" | "approval_pending";
 export type DecideOutcome = "approved" | "rejected" | "lapsed";
@@ -37,4 +39,11 @@ export function approvalNotificationCopy(type: string, payload: Record<string, u
   if (!text) return null;
   const contract = typeof payload.contract_id === "string" ? payload.contract_id : null;
   return { text, href: type === "spend_request_approved" && contract ? `/contracts/${contract}` : "/approvals" };
+}
+
+export interface SpendPolicy { enabled: boolean; threshold_minor: number; currency: string }
+
+export function policySummary(p: SpendPolicy | null): string {
+  if (!p || !p.enabled) return "No approval rule. Owners and admins accept contracts directly.";
+  return `Contracts of ${formatMinor(p.threshold_minor, p.currency)} or more, or in a currency other than ${p.currency}, need an owner's approval when an admin accepts them.`;
 }

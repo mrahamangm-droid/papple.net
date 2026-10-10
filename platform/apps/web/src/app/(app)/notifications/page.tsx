@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/shell/AppShell";
 import { MarkReadButton } from "@/components/marketplace/MarkReadButton";
 import { requireCapability } from "@/lib/auth-context";
+import { approvalNotificationCopy } from "@/lib/approvals/present";
 import { notificationCopy } from "@/lib/contracts/present";
 import { inviteNotificationCopy } from "@/lib/talent/present";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -26,7 +27,8 @@ export default async function Notifications() {
       <ul className="mt-6 space-y-3">
         {(data ?? []).map((n) => {
           const payload = (n.payload ?? {}) as { project_id?: string; conversation_id?: string; contract_id?: string };
-          const contract = notificationCopy(n.type as string, payload) ?? inviteNotificationCopy(n.type as string, (n.payload ?? {}) as Record<string, unknown>);
+          const contract = notificationCopy(n.type as string, payload) ?? inviteNotificationCopy(n.type as string, (n.payload ?? {}) as Record<string, unknown>)
+            ?? approvalNotificationCopy(n.type as string, (n.payload ?? {}) as Record<string, unknown>);
           const href = contract ? contract.href : payload.conversation_id ? `/messages/${payload.conversation_id}` : payload.project_id ? `/projects/${payload.project_id}` : null;
           return (
             <li key={n.id} className={`text-sm ${n.read_at ? "opacity-60" : ""}`}>
