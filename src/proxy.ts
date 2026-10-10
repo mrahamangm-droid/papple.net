@@ -2,21 +2,22 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// Lightweight request-level middleware. Security headers are also set
-// globally in next.config.mjs (headers()); this layer is reserved for
+// Lightweight request-level proxy (Next 16 renamed middleware.ts to proxy.ts;
+// it now runs on the Node.js runtime). Security headers are also set globally
+// in next.config.mjs (headers()); this layer is reserved for
 // request-shape checks and auth gating that don't belong in next.config or
 // in every individual page/route, and is kept deliberately minimal so it
 // doesn't add latency to every request.
 //
 // Note: the auth-gated paths below (/account, /workspace, /assistant,
-// /enterprise, /admin) don't exist yet in this build — this middleware is
+// /enterprise, /admin) don't exist yet in this build — this proxy is
 // forward-compatible scaffolding for when they're built, and is a no-op
 // until then since nothing currently routes to those paths.
 const ADMIN_PATHS = ["/admin"];
 const AUTH_REQUIRED_PATHS = ["/account", "/workspace", "/assistant", "/enterprise"];
 const AUTH_EXEMPT_PATHS = ["/enterprise/accept-invite"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/api/")) {
