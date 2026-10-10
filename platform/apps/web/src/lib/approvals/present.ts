@@ -1,4 +1,5 @@
 import { formatMinor } from "../marketplace/present";
+import { isValidUuid } from "../marketplace/validators";
 
 export type ApprovalFailure = "forbidden" | "invalid" | "duplicate" | "rate" | "error";
 export type AcceptOutcome = "accepted" | "approval_requested" | "approval_pending";
@@ -25,6 +26,7 @@ export function acceptOutcomeMessage(o: AcceptOutcome | undefined): string | nul
 
 /** The database decides; these only choose which buttons to show. */
 export const canDecide = (role: string, requestedBy: string | null, userId: string) => role === "owner" && requestedBy !== userId;
+export const isManager = (m: { role: string }) => m.role === "owner" || m.role === "admin";
 export const canWithdraw = (role: string, requestedBy: string | null, userId: string) => role === "owner" || requestedBy === userId;
 
 const COPY: Record<string, string> = {
@@ -38,7 +40,9 @@ export function approvalNotificationCopy(type: string, payload: Record<string, u
   const text = COPY[type];
   if (!text) return null;
   const contract = typeof payload.contract_id === "string" ? payload.contract_id : null;
-  return { text, href: type === "spend_request_approved" && contract ? `/contracts/${contract}` : "/approvals" };
+  const org = typeof payload.org_id === "string" && isValidUuid(payload.org_id) ? payload.org_id : null;
+  if (type === "spend_request_approved" && contract) return { text, href: `/contracts/${contract}` };
+  return { text, href: org ? `/approvals?org=${org}` : "/approvals" };
 }
 
 export interface SpendPolicy { enabled: boolean; threshold_minor: number; currency: string }

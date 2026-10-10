@@ -1,7 +1,8 @@
 import { AppShell } from "@/components/shell/AppShell";
 import { PolicyForm } from "@/components/approvals/ApprovalForms";
 import { pickOrg } from "@/lib/approvals/org";
-import { policySummary, type SpendPolicy } from "@/lib/approvals/present";
+import { OrgSwitcher } from "@/components/approvals/OrgSwitcher";
+import { isManager, policySummary, type SpendPolicy } from "@/lib/approvals/present";
 import { requireCapability } from "@/lib/auth-context";
 import { fromMinor } from "@/lib/marketplace/present";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -11,9 +12,11 @@ export const dynamic = "force-dynamic";
 
 export default async function ApprovalSettingsPage({ searchParams }: PageProps<"/settings/approvals">) {
   const ctx = await requireCapability("org.read");
-  const membership = pickOrg(ctx.memberships, (await searchParams).org);
-  const manager = membership && (membership.role === "owner" || membership.role === "admin");
+  const membership = pickOrg(ctx.memberships, (await searchParams).org, isManager);
+  const manager = membership && isManager(membership);
   const db = await createServerSupabase();
+  const { data: orgRows } = await db.from("organizations").select("id, name").in("id", ctx.memberships.map((m) => m.orgId));
+  const orgs = (orgRows ?? []).map((o) => ({ id: o.id as string, name: o.name as string }));
   const { data: policy } = manager
     ? await db.from("spend_policies").select("enabled, threshold_minor, currency").eq("org_id", membership.orgId).maybeSingle()
     : { data: null };
@@ -21,6 +24,7 @@ export default async function ApprovalSettingsPage({ searchParams }: PageProps<"
   return (
     <AppShell ctx={ctx}>
       <h1 className="text-2xl font-semibold">Contract approvals</h1>
+      {membership && <OrgSwitcher orgId={membership.orgId} orgs={orgs} />}
       {!manager ? (
         <p className="mt-4 text-sm">Only owners and admins can see the approval rule.</p>
       ) : (

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { AppShell } from "@/components/shell/AppShell";
 import { DecideButtons, WithdrawButton } from "@/components/approvals/ApprovalForms";
 import { pickOrg } from "@/lib/approvals/org";
-import { canDecide, canWithdraw, requestStatusLabel } from "@/lib/approvals/present";
+import { OrgSwitcher } from "@/components/approvals/OrgSwitcher";
+import { canDecide, canWithdraw, isManager, requestStatusLabel } from "@/lib/approvals/present";
 import { requireCapability } from "@/lib/auth-context";
 import { formatMinor } from "@/lib/marketplace/present";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -15,18 +16,24 @@ const COLS = "id, contract_id, requested_by, status, price, currency, note, crea
 
 export default async function ApprovalsPage({ searchParams }: PageProps<"/approvals">) {
   const ctx = await requireCapability("org.read");
-  const membership = pickOrg(ctx.memberships, (await searchParams).org);
-  const manager = membership && (membership.role === "owner" || membership.role === "admin");
-  if (!membership || !manager) {
-    return <AppShell ctx={ctx}><h1 className="text-2xl font-semibold">Approvals</h1><p className="mt-4 text-sm">Only owners and admins can see approvals.</p></AppShell>;
+  const membership = pickOrg(ctx.memberships, (await searchParams).org, isManager);
+  const db = await createServerSupabase();
+  const { data: orgRows } = await db.from("organizations").select("id, name").in("id", ctx.memberships.map((m) => m.orgId));
+  const orgs = (orgRows ?? []).map((o) => ({ id: o.id as string, name: o.name as string }));
+  if (!membership || !isManager(membership)) {
+    return (
+      <AppShell ctx={ctx}>
+        <h1 className="text-2xl font-semibold">Approvals</h1>
+        {membership && <OrgSwitcher orgId={membership.orgId} orgs={orgs} />}
+        <p className="mt-4 text-sm">Only owners and admins can see approvals.</p>
+      </AppShell>
+    );
   }
   const orgId = membership.orgId, role = membership.role;
-  const db = await createServerSupabase();
-  const [{ data: pending }, { data: decided }, { data: members }, { data: orgs }] = await Promise.all([
+  const [{ data: pending }, { data: decided }, { data: members }] = await Promise.all([
     db.from("spend_requests").select(COLS).eq("org_id", orgId).eq("status", "pending").order("created_at", { ascending: true }),
     db.from("spend_requests").select(COLS).eq("org_id", orgId).neq("status", "pending").order("created_at", { ascending: false }).limit(50),
     db.rpc("team_members", { p_org: orgId }),
-    db.from("organizations").select("id, name").in("id", ctx.memberships.map((m) => m.orgId)),
   ]);
   const names = new Map(((members ?? []) as { user_id: string; email: string; display_name: string | null }[]).map((m) => [m.user_id, m.display_name || m.email]));
   const who = (id: string | null) => (id === ctx.userId ? "you" : (id && names.get(id)) || "a former member");
@@ -35,16 +42,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
   return (
     <AppShell ctx={ctx}>
       <h1 className="text-2xl font-semibold">Approvals</h1>
-      {ctx.memberships.length > 1 && (
-        <form className="mt-3 flex items-end gap-2 text-sm" method="get">
-          <label>Organization
-            <select name="org" defaultValue={orgId} className="ml-2 rounded-md border border-neutral-300 bg-transparent px-2 py-1">
-              {(orgs ?? []).map((o) => <option key={o.id as string} value={o.id as string}>{o.name as string}</option>)}
-            </select>
-          </label>
-          <button className="rounded-md border border-neutral-400 px-3 py-1">Switch</button>
-        </form>
-      )}
+      <OrgSwitcher orgId={orgId} orgs={orgs} />
       <p className="mt-2 max-w-2xl text-sm">Contracts an admin accepted that need an owner&apos;s approval under your <Link className="underline" href={`/settings/approvals?org=${orgId}`}>approval rule</Link>.</p>
 
       <h2 className="mt-8 text-lg font-medium">Waiting</h2>

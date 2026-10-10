@@ -1,5 +1,5 @@
 begin;
-select plan(68);
+select plan(85);
 create function extensions.t_rows_affected(q text) returns int language plpgsql as
 $$ declare n int; begin execute q; get diagnostics n = row_count; return n; end $$;
 
@@ -150,7 +150,45 @@ select is(accept_contract('cccccc41-0000-0000-0000-0000000000c1','dddddd41-0000-
 select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a6',true);
 select lives_ok($$select cancel_contract('cccccc41-0000-0000-0000-0000000000b1','dddddd41-0000-0000-0000-000000000003','changed plans')$$, 'the provider cancels the draft');
 select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a1',true);
-select is(spend_request_decide('cccccc41-0000-0000-0000-0000000000c1', (select id from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000003' and status = 'pending'), true, ''), 'lapsed', 'approving on a cancelled contract lapses');
+select is((select status from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000003'), 'lapsed', 'cancelling the draft lapses its request at once');
+select throws_ok($$select spend_request_decide('cccccc41-0000-0000-0000-0000000000c1', (select id from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000003'), true, '')$$, '22023', null, 'and it can no longer be approved');
+
+-- 10b. review fixes: a request never outlives its contract being settled another way
+reset role; update contracts set accepted_by_client = false where id = 'dddddd41-0000-0000-0000-000000000001'; set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a3',true);
+select is(accept_contract('cccccc41-0000-0000-0000-0000000000c1','dddddd41-0000-0000-0000-000000000001'), 'approval_requested', 'a request before an owner accepts directly');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a1',true);
+select is(accept_contract('cccccc41-0000-0000-0000-0000000000c1','dddddd41-0000-0000-0000-000000000001'), 'accepted', 'an owner accepts directly while a request is pending');
+select is((select count(*)::int from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000001' and status = 'pending'), 0, 'the direct accept lapses the pending request');
+reset role; update contracts set accepted_by_client = false where id = 'dddddd41-0000-0000-0000-000000000001'; set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a3',true);
+select is(accept_contract('cccccc41-0000-0000-0000-0000000000c1','dddddd41-0000-0000-0000-000000000001'), 'approval_requested', 'a request before the rule is switched off');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a1',true);
+select lives_ok($$select spend_policy_set('cccccc41-0000-0000-0000-0000000000c1', false, 10000, 'USD')$$, 'the owner switches the rule off');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a3',true);
+select is(accept_contract('cccccc41-0000-0000-0000-0000000000c1','dddddd41-0000-0000-0000-000000000001'), 'accepted', 'with the rule off the admin accepts directly');
+select is((select count(*)::int from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000001' and status = 'pending'), 0, 'and the old request lapses');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a1',true);
+select lives_ok($$select spend_policy_set('cccccc41-0000-0000-0000-0000000000c1', true, 1000, 'USD')$$, 'the rule is back on with a lower threshold');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a3',true);
+select is(accept_contract('cccccc41-0000-0000-0000-0000000000c1','dddddd41-0000-0000-0000-000000000002'), 'approval_requested', 'a request on K2 before it is cancelled');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a6',true);
+select lives_ok($$select cancel_contract('cccccc41-0000-0000-0000-0000000000b1','dddddd41-0000-0000-0000-000000000002','no longer needed')$$, 'the provider cancels K2');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a3',true);
+select is((select count(*)::int from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000002' and status = 'pending'), 0, 'cancelling lapses the pending request');
+reset role;
+select is((select count(*)::int from notifications where type like 'spend_%' and payload->>'org_id' = 'cccccc41-0000-0000-0000-0000000000c1'), (select count(*)::int from notifications where type like 'spend_%'), 'every approval notification names the organization');
+-- the fingerprint cannot be fooled by separators inside titles
+update contracts set accepted_by_client = false where id = 'dddddd41-0000-0000-0000-000000000001';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a6',true);
+select lives_ok($$select set_milestones('cccccc41-0000-0000-0000-0000000000b1','dddddd41-0000-0000-0000-000000000001', jsonb_build_array(jsonb_build_object('title','a','amount',25000,'due_date','2027-01-01'), jsonb_build_object('title', 'b|25000|2027-02-01' || chr(10) || '2|c','amount',25000,'due_date','2027-03-01')))$$, 'schedule A with separators in a title');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a3',true);
+select is(accept_contract('cccccc41-0000-0000-0000-0000000000c1','dddddd41-0000-0000-0000-000000000001'), 'approval_requested', 'a request for schedule A');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a6',true);
+select lives_ok($$select set_milestones('cccccc41-0000-0000-0000-0000000000b1','dddddd41-0000-0000-0000-000000000001', jsonb_build_array(jsonb_build_object('title', 'a|25000|2027-01-01' || chr(10) || '2|b','amount',25000,'due_date','2027-02-01'), jsonb_build_object('title','c','amount',25000,'due_date','2027-03-01')))$$, 'schedule B that would join to the same text');
+select set_config('request.jwt.claim.sub','aaaaaa41-0000-0000-0000-0000000000a1',true);
+select is(spend_request_decide('cccccc41-0000-0000-0000-0000000000c1', (select id from spend_requests where contract_id = 'dddddd41-0000-0000-0000-000000000001' and status = 'pending'), true, ''), 'lapsed', 'a look-alike schedule still lapses the approval');
 
 -- 11. no direct writes
 select throws_ok($$insert into spend_policies (org_id, enabled, threshold_minor, currency) values ('cccccc41-0000-0000-0000-0000000000b1', true, 1, 'USD')$$, '42501', null, 'policies cannot be inserted directly');

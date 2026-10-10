@@ -13,4 +13,11 @@ describe("pickOrg", () => {
     expect(pickOrg(ms, undefined)?.orgId).toBe(A);
   });
   it("returns nothing without memberships", () => expect(pickOrg([], A)).toBeUndefined());
+  it("prefers a membership the page can use when none is named", () => {
+    const mixed = [{ orgId: A, role: "member" }, { orgId: B, role: "owner" }];
+    const manager = (m: { role: string }) => m.role === "owner" || m.role === "admin";
+    expect(pickOrg(mixed, undefined, manager)?.orgId).toBe(B);
+    expect(pickOrg(mixed, A, manager)?.orgId).toBe(A);
+    expect(pickOrg([{ orgId: A, role: "member" }], undefined, manager)?.orgId).toBe(A);
+  });
 });

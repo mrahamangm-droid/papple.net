@@ -19,6 +19,7 @@ describe("acceptOutcomeMessage", () => {
 
 describe("approvalNotificationCopy", () => {
   const payload = { contract_id: "c1", request_id: "r1", price: 123456 };
+  const ORG = "11111111-1111-4111-8111-111111111111";
   it("links owners to the queue and requesters to the outcome", () => {
     expect(approvalNotificationCopy("spend_approval_requested", payload)).toEqual({ text: "A contract is waiting for your approval.", href: "/approvals" });
     expect(approvalNotificationCopy("spend_request_approved", payload)).toEqual({ text: "Your contract approval was granted.", href: "/contracts/c1" });
@@ -27,6 +28,11 @@ describe("approvalNotificationCopy", () => {
   it("never shows an amount and ignores other types", () => {
     for (const t of ["spend_approval_requested", "spend_request_approved", "spend_request_rejected"]) expect(approvalNotificationCopy(t, payload)!.text).not.toMatch(/\d/);
     expect(approvalNotificationCopy("contract_active", payload)).toBeNull();
+  });
+  it("opens the queue of the organization the request belongs to", () => {
+    expect(approvalNotificationCopy("spend_approval_requested", { ...payload, org_id: ORG })!.href).toBe(`/approvals?org=${ORG}`);
+    expect(approvalNotificationCopy("spend_request_rejected", { ...payload, org_id: ORG })!.href).toBe(`/approvals?org=${ORG}`);
+    expect(approvalNotificationCopy("spend_approval_requested", { ...payload, org_id: "not-a-uuid" })!.href).toBe("/approvals");
   });
   it("falls back to the queue without a contract id", () => {
     expect(approvalNotificationCopy("spend_request_approved", {})!.href).toBe("/approvals");
