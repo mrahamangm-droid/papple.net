@@ -247,7 +247,7 @@ begin
   select coalesce(s.title, 'Booking') into v_title from services s where s.id = v_b.service_id;
   perform public.booking_audit(p_org, 'booking.pay', p_booking, jsonb_build_object('payment', v_p.id, 'total', v_total));
   return jsonb_build_object('payment_id', v_p.id, 'amount', v_b.price, 'client_fee', v_cf, 'provider_fee', v_pf, 'client_total', v_total,
-    'application_fee', v_fee, 'currency', v_b.currency, 'title', coalesce(v_title, 'Booking'), 'previous_session', v_prev);
+    'application_fee', v_fee, 'currency', v_b.currency, 'title', coalesce(v_title, 'Booking'), 'previous_session', v_prev, 'pay_by', v_b.pay_by);
 end $$;
 
 create function public.booking_payment_destination(p_payment uuid) returns text
@@ -367,6 +367,16 @@ $$ select p.id, p.payment_intent_id, r.amount, r.currency, r.idempotency_key
    from booking_payments p join booking_refunds r on r.booking_payment_id = p.id
    where p.booking_id = p_booking and r.status = 'pending' and p.payment_intent_id is not null $$;
 
+-- For the "Retry refund" button: may this member of p_org ask the server to (re)send this booking's queued refund?
+create function public.booking_refund_pending(p_org uuid, p_booking uuid) returns boolean
+language plpgsql stable security definer set search_path = public as
+$$ begin
+  if auth.uid() is null or not public.has_org_role(p_org, array['owner','admin','member'])
+     or not exists (select 1 from bookings where id = p_booking and p_org in (provider_org_id, client_org_id)) then
+    raise exception 'not allowed' using errcode = '42501'; end if;
+  return exists (select 1 from booking_payments p join booking_refunds r on r.booking_payment_id = p.id where p.booking_id = p_booking and r.status = 'pending');
+end $$;
+
 create function public.booking_record_refund_failed(p_payment uuid, p_reason text) returns void
 language sql security definer set search_path = public as
 $$ update booking_refunds set failure_reason = left(coalesce(p_reason, 'unknown error'), 500) where booking_payment_id = p_payment and status = 'pending' $$;
@@ -479,7 +489,7 @@ revoke execute on function public.booking_is_lapsed(uuid), public.booking_releas
 grant execute on function public.booking_payment_destination(uuid), public.booking_attach_checkout(uuid, text, text),
   public.booking_refund_to_send(uuid), public.booking_record_refund_failed(uuid, text) to service_role;
 revoke execute on function public.service_set_booking_price(uuid, uuid, int), public.booking_pay(uuid, uuid), public.booking_cancel(uuid, uuid, text),
-  public.booking_list(uuid), public.booking_price_offer(uuid) from public, anon;
+  public.booking_list(uuid), public.booking_price_offer(uuid), public.booking_refund_pending(uuid, uuid) from public, anon;
 grant execute on function public.service_set_booking_price(uuid, uuid, int), public.booking_pay(uuid, uuid), public.booking_cancel(uuid, uuid, text),
-  public.booking_list(uuid), public.booking_price_offer(uuid) to authenticated;
+  public.booking_list(uuid), public.booking_price_offer(uuid), public.booking_refund_pending(uuid, uuid) to authenticated;
 grant execute on function public.booking_price_offer(uuid) to anon;

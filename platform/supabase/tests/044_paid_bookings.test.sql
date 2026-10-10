@@ -1,5 +1,5 @@
 begin;
-select plan(61);
+select plan(64);
 
 insert into auth.users (id, email) values
  ('aaaaaa44-0000-0000-0000-0000000000a1','p@x.test'),('aaaaaa44-0000-0000-0000-0000000000a2','pm@x.test'),('aaaaaa44-0000-0000-0000-0000000000a3','c@x.test'),('aaaaaa44-0000-0000-0000-0000000000a4','cm@x.test'),('aaaaaa44-0000-0000-0000-0000000000a5','cv@x.test'),('aaaaaa44-0000-0000-0000-0000000000a6','d@x.test'),('aaaaaa44-0000-0000-0000-0000000000a7','e@x.test');
@@ -58,7 +58,7 @@ select throws_ok($$select booking_pay('cccccc44-0000-0000-0000-0000000000b1', cu
 select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a5',true);
 select throws_ok($$select booking_pay('cccccc44-0000-0000-0000-0000000000c1', current_setting('t.b1')::uuid)$$, '42501', null, 'a viewer cannot pay');
 select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a4',true);
-select is((select booking_pay('cccccc44-0000-0000-0000-0000000000c1', current_setting('t.b1')::uuid) - 'payment_id' - 'title'),
+select is((select booking_pay('cccccc44-0000-0000-0000-0000000000c1', current_setting('t.b1')::uuid) - 'payment_id' - 'title' - 'pay_by'),
   '{"amount": 10000, "currency": "USD", "client_fee": 200, "client_total": 10200, "provider_fee": 500, "application_fee": 700, "previous_session": null}'::jsonb,
   'the snapshotted commission is charged, not today''s setting');
 reset role; update platform_settings set value = '1000' where key = 'payments.min_application_fee_minor'; set local role authenticated;
@@ -94,6 +94,14 @@ select throws_ok($$select booking_pay('cccccc44-0000-0000-0000-0000000000c1', cu
 select is(booking_cancel('cccccc44-0000-0000-0000-0000000000c1', current_setting('t.b1')::uuid, 'Plans changed'), 'refund_pending', 'cancelling early queues a full refund');
 reset role;
 select is((select amount || ' ' || status from booking_refunds where booking_payment_id = current_setting('t.p1')::uuid), '10200 pending', 'the refund is the full amount paid');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a1',true);
+select is(booking_refund_pending('cccccc44-0000-0000-0000-0000000000b1', current_setting('t.b1')::uuid), true, 'the provider may retry sending the queued refund');
+select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a5',true);
+select throws_ok($$select booking_refund_pending('cccccc44-0000-0000-0000-0000000000c1', current_setting('t.b1')::uuid)$$, '42501', null, 'a viewer cannot trigger a refund');
+select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a7',true);
+select throws_ok($$select booking_refund_pending('cccccc44-0000-0000-0000-0000000000e1', current_setting('t.b1')::uuid)$$, '42501', null, 'a third organization cannot trigger a refund');
+reset role;
 set local role service_role;
 select is((select payment_intent_id || ' ' || amount || ' ' || idempotency_key from booking_refund_to_send(current_setting('t.b1')::uuid)),
   'pi_1 10200 booking-refund-' || current_setting('t.p1'), 'the server gets the charge to refund and a fixed idempotency key');

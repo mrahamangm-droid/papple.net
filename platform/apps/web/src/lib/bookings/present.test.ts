@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookingFailureMessage, bookingNotificationCopy, bookingStatusLabel, groupSlotsByDay } from "./present";
+import { bookingFailureMessage, bookingNotificationCopy, bookingPaymentState, bookingPriceLine, bookingStatusLabel, groupSlotsByDay } from "./present";
 
 const NOW = new Date("2027-01-04T12:00:00Z");
 
@@ -39,5 +39,43 @@ describe("bookingNotificationCopy", () => {
   it("has plain failure messages", () => {
     expect(bookingFailureMessage("taken")).toBe("That time was just taken. Please pick another.");
     expect(bookingFailureMessage("stale")).toMatch(/no longer/i);
+  });
+});
+
+describe("bookingPaymentState", () => {
+  const NOW = new Date("2027-03-01T10:00:00Z");
+  const row = (o: Record<string, unknown>) => ({ status: "confirmed", price: 10000, currency: "USD", pay_by: "2027-03-02T10:00:00Z", payment_status: null, refund_status: null, ...o });
+  it.each([
+    [{ price: null }, null],
+    [{ status: "pending", pay_by: null }, "awaiting"],
+    [{}, "due"],
+    [{ pay_by: "2027-03-01T09:59:00Z" }, "overdue"],
+    [{ payment_status: "pending" }, "due"],
+    [{ payment_status: "failed" }, "due"],
+    [{ payment_status: "succeeded" }, "paid"],
+    [{ status: "cancelled", payment_status: "succeeded" }, "paid"],
+    [{ status: "cancelled", payment_status: "refund_pending", refund_status: "pending" }, "refund_pending"],
+    [{ status: "cancelled", payment_status: "refunded", refund_status: "succeeded" }, "refunded"],
+    [{ status: "cancelled" }, null],
+    [{ status: "declined", pay_by: null }, null],
+  ])("%o -> %s", (o, kind) => {
+    expect(bookingPaymentState(row(o), NOW)?.kind ?? null).toBe(kind);
+  });
+  it("labels with the amount", () => {
+    expect(bookingPaymentState(row({ payment_status: "succeeded" }), NOW)?.text).toBe("Paid $100.00");
+    expect(bookingPaymentState(row({ status: "pending", pay_by: null }), NOW)?.text).toBe("$100.00, paid after confirmation");
+  });
+});
+
+describe("booking price copy", () => {
+  it("describes the price and the cancellation rule", () => {
+    expect(bookingPriceLine({ price: 5000, currency: "USD" })).toBe("$50.00 per session, paid after the professional confirms.");
+    expect(bookingPriceLine(null)).toBeNull();
+  });
+});
+
+describe("paid booking notifications", () => {
+  it("has neutral copy for a payment", () => {
+    expect(bookingNotificationCopy("booking_paid", {})?.text).toBe("A booking was paid.");
   });
 });

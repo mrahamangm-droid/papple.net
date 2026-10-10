@@ -4,6 +4,23 @@ import { createPaymentsServiceDb } from "./service-db";
 const ok = (data: unknown) => vi.fn(async (_fn: string, _a: Record<string, unknown>) => ({ data, error: null }));
 
 describe("createPaymentsServiceDb", () => {
+  it("routes booking payments to their own functions", async () => {
+    const rpc = ok(true);
+    const db = createPaymentsServiceDb(rpc);
+    await db.bookingDestination("p");
+    await db.bookingAttachCheckout("p", "cs", null);
+    await db.bookingRecordRefundFailed("p", "declined");
+    expect(rpc.mock.calls).toEqual([
+      ["booking_payment_destination", { p_payment: "p" }],
+      ["booking_attach_checkout", { p_payment: "p", p_session: "cs", p_prev: null }],
+      ["booking_record_refund_failed", { p_payment: "p", p_reason: "declined" }],
+    ]);
+  });
+  it("returns the one queued booking refund, or null", async () => {
+    const row = { payment_id: "p", payment_intent_id: "pi", amount: 10200, currency: "USD", idempotency_key: "booking-refund-p" };
+    expect(await createPaymentsServiceDb(ok([row])).bookingRefundToSend("b")).toEqual({ paymentId: "p", paymentIntentId: "pi", amount: 10200, currency: "USD", idempotencyKey: "booking-refund-p" });
+    expect(await createPaymentsServiceDb(ok([])).bookingRefundToSend("b")).toBeNull();
+  });
   it("records a succeeded payment with the paid amount and currency", async () => {
     const rpc = ok("recorded");
     const out = await createPaymentsServiceDb(rpc).recordPaymentSucceeded({ paymentId: "p", sessionId: "cs", intentId: "pi", amountTotal: 40800, currency: "USD" });

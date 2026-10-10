@@ -59,3 +59,24 @@ describe("calls", () => {
       expect(await mk(async () => ({ data: null, error: { code } })).svc.cancel({ orgId: ORG, bookingId: BK, reason: "x" })).toEqual({ ok: false, code: out });
     });
 });
+
+describe("paid bookings", () => {
+  it("reports whether a cancellation queued a refund", async () => {
+    expect(await mk(async () => ({ data: "refund_pending", error: null })).svc.cancel({ orgId: ORG, bookingId: BK, reason: "x" })).toEqual({ ok: true, refund: true });
+    expect(await mk(async () => ({ data: "cancelled", error: null })).svc.cancel({ orgId: ORG, bookingId: BK, reason: "x" })).toEqual({ ok: true, refund: false });
+  });
+  it("turns the typed price into minor units, empty meaning free", async () => {
+    const { svc, rpc } = mk();
+    expect(await svc.setServicePrice({ orgId: ORG, serviceId: SVC, price: "50.5", currency: "USD" })).toEqual({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith("service_set_booking_price", { p_org: ORG, p_service: SVC, p_price: 5050 });
+    expect(await svc.setServicePrice({ orgId: ORG, serviceId: SVC, price: " ", currency: "USD" })).toEqual({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith("service_set_booking_price", { p_org: ORG, p_service: SVC, p_price: null });
+    expect(await svc.setServicePrice({ orgId: ORG, serviceId: SVC, price: "5000", currency: "JPY" })).toEqual({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith("service_set_booking_price", { p_org: ORG, p_service: SVC, p_price: 5000 });
+  });
+  it.each(["50.555", "0", "-5", "1e3", "abc", "100000.01", "5,00"])("refuses the price %s without rounding it", async (price) => {
+    const { svc, rpc } = mk();
+    expect(await svc.setServicePrice({ orgId: ORG, serviceId: SVC, price, currency: "USD" })).toEqual({ ok: false, code: "invalid" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});

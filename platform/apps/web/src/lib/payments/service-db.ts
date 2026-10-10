@@ -27,6 +27,15 @@ export function createPaymentsServiceDb(rpc: ServiceRpc) {
     recordSubscription: (i: { orgId: string; customerId: string; subscriptionId: string; priceId: string; status: string; periodEnd: string | null; cancelAtPeriodEnd: boolean; eventAt: string }) =>
       call<string>("apply_subscription_event", { p_org: i.orgId, p_customer: i.customerId, p_sub: i.subscriptionId, p_price: i.priceId, p_status: i.status, p_period_end: i.periodEnd, p_cancel: i.cancelAtPeriodEnd, p_event_at: i.eventAt }),
     billingCustomer: (orgId: string) => call<string | null>("org_billing_customer", { p_org: orgId }),
+    bookingDestination: (paymentId: string) => call<string>("booking_payment_destination", { p_payment: paymentId }),
+    bookingAttachCheckout: (paymentId: string, sessionId: string, previous: string | null) =>
+      call<boolean>("booking_attach_checkout", { p_payment: paymentId, p_session: sessionId, p_prev: previous }),
+    bookingRefundToSend: async (bookingId: string) => {
+      const rows = await call<{ payment_id: string; payment_intent_id: string; amount: number; currency: string; idempotency_key: string }[] | null>("booking_refund_to_send", { p_booking: bookingId });
+      const r = rows?.[0];
+      return r ? { paymentId: r.payment_id, paymentIntentId: r.payment_intent_id, amount: r.amount, currency: r.currency, idempotencyKey: r.idempotency_key } : null;
+    },
+    bookingRecordRefundFailed: (paymentId: string, reason: string) => call<void>("booking_record_refund_failed", { p_payment: paymentId, p_reason: reason }),
     recordAccountUpdate: (account: string, payoutsEnabled: boolean, detailsSubmitted: boolean) =>
       call<boolean>("record_account_update", { p_account: account, p_payouts: payoutsEnabled, p_details: detailsSubmitted }),
   };

@@ -44,6 +44,7 @@ import { createApiKeyService } from "./api/service";
 import { createTeamService } from "./team/service";
 import { createApprovalsService } from "./approvals/service";
 import { createBookingsService } from "./bookings/service";
+import { createBookingPayments } from "./bookings/payments";
 import { buildInviteEmail, createInviteMailer } from "./team/email";
 import { newInviteToken } from "./team/token";
 import { createBillingService } from "./billing/service";
@@ -446,6 +447,35 @@ export const bookingsService = (revalidate: (path: string) => void) => createBoo
     const { data, error } = await userRpc(fn, args);
     return { data, error: error ? { code: error.code } : null };
   },
+  revalidate,
+});
+
+/** Paying for bookings and sending their refunds. The user-scoped RPC decides first; service-role calls and Stripe are
+ *  lazy, so importing this module never needs keys. */
+export const bookingPayments = (revalidate: (path: string) => void) => createBookingPayments({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("checkout", `checkout:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  service: {
+    destination: (id) => paymentsServiceDb().bookingDestination(id),
+    attach: (id, session, prev) => paymentsServiceDb().bookingAttachCheckout(id, session, prev),
+    refundToSend: (bookingId) => paymentsServiceDb().bookingRefundToSend(bookingId),
+    recordRefundFailed: (id, reason) => paymentsServiceDb().bookingRecordRefundFailed(id, reason),
+  },
+  provider: {
+    createCheckout: (i) => paymentProvider().createCheckout(i),
+    expireCheckout: (id) => paymentProvider().expireCheckout(id),
+    refundPayment: (i) => paymentProvider().refundPayment(i),
+  },
+  appUrl: () => {
+    const url = process.env.NEXT_PUBLIC_SITE_URL;
+    if (!url) throw new Error("NEXT_PUBLIC_SITE_URL is not set");
+    return url;
+  },
+  expiryMinutes: () => settings.getSetting("payments.checkout_expiry_minutes", z.number().int().min(30).max(1440)),
   revalidate,
 });
 
