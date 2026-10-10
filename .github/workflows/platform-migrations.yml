@@ -1,0 +1,69 @@
+name: platform-migrations
+# Applies platform/supabase/migrations to a Supabase project. Started by hand from the Actions tab, never on push:
+# staging was first loaded by hand, so check what is pending (dry-run) before applying anything.
+# Secrets live in GitHub Environments "staging" and "production" (see platform/docs/secrets.md):
+# SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD. Give "production" a required reviewer.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which Supabase project
+        type: choice
+        options: [staging, production]
+        default: staging
+      mode:
+        description: "dry-run lists pending migrations; apply runs them; mark-applied records versions up to 'through' as already applied (for a database loaded by hand)"
+        type: choice
+        options: [dry-run, apply, mark-applied]
+        default: dry-run
+      through:
+        description: "mark-applied only: last version already in the database, e.g. 0039"
+        type: string
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: platform-migrations-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: platform
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      MODE: ${{ inputs.mode }}
+      THROUGH: ${{ inputs.through }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.118.0
+      - name: Check secrets are configured
+        run: |
+          for v in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF; do
+            if [ -z "${!v}" ]; then echo "::error::$v is not set in the '${{ inputs.environment }}' environment"; exit 1; fi
+          done
+      - name: Link project
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - name: Migration history (local vs remote)
+        run: supabase migration list --linked --password "$SUPABASE_DB_PASSWORD"
+      - name: Run
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            dry-run) supabase db push --linked --dry-run --password "$SUPABASE_DB_PASSWORD" ;;
+            apply)   supabase db push --linked --password "$SUPABASE_DB_PASSWORD" ;;
+            mark-applied)
+              if ! [[ "$THROUGH" =~ ^[0-9]{4}$ ]]; then echo "::error::'through' must be a four-digit version such as 0039"; exit 1; fi
+              versions=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -d_ -f1 | awk -v t="$THROUGH" '$1 <= t')
+              [ -n "$versions" ] || { echo "::error::no migrations up to $THROUGH"; exit 1; }
+              # shellcheck disable=SC2086
+              supabase migration repair --linked --status applied $versions --password "$SUPABASE_DB_PASSWORD"
+              supabase db push --linked --dry-run --password "$SUPABASE_DB_PASSWORD" ;;
+          esac
