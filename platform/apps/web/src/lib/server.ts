@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { createAdminAction } from "./admin-action";
 import { createAuditWriter } from "./audit";
-import { parseRateLimitEnv, parseServerEnv } from "./env";
+import { parseRateLimitEnv, parseServerEnv, parseServiceEnv } from "./env";
 import { headers } from "next/headers";
 import { RULES, RateLimitError, createRateLimiter, enforce, type Rule } from "./ratelimit";
 import { createOnboarding, type OnboardingInput } from "./onboarding";
@@ -50,7 +50,7 @@ import { formatMinor } from "./marketplace/present";
 import type { PaymentProvider } from "./payments/provider";
 
 /** Production wiring of the dependency-injected services. Server-only. */
-const salt = () => createHash("sha256").update(`audit-ip:${parseServerEnv(process.env).SUPABASE_SERVICE_ROLE_KEY}`).digest("hex");
+const salt = () => createHash("sha256").update(`audit-ip:${parseServiceEnv(process.env).SUPABASE_SERVICE_ROLE_KEY}`).digest("hex");
 
 let auditWriter: ReturnType<typeof createAuditWriter> | undefined;
 /** Lazy so that importing this module never requires secrets (e.g. during `next build`). */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePublicEnv, parseRateLimitEnv, parseServerEnv } from "./env";
+import { parsePublicEnv, parseRateLimitEnv, parseServerEnv, parseServiceEnv } from "./env";
 
 const valid = {
   NEXT_PUBLIC_SUPABASE_URL: "https://abc.supabase.co",
@@ -71,5 +71,15 @@ describe("parseRateLimitEnv", () => {
     const ok = parseRateLimitEnv({ UPSTASH_REDIS_REST_URL: "https://x.upstash.io", UPSTASH_REDIS_REST_TOKEN: "tok" });
     expect(ok.UPSTASH_REDIS_REST_TOKEN).toBe("tok");
     expect(() => parseRateLimitEnv({ UPSTASH_REDIS_REST_URL: "nope", UPSTASH_REDIS_REST_TOKEN: "tok-secret" })).toThrow(/UPSTASH_REDIS_REST_URL/);
+  });
+});
+
+describe("parseServiceEnv", () => {
+  it("needs only the Supabase url and service-role key, not storage config", () => {
+    const e = parseServiceEnv({ NEXT_PUBLIC_SUPABASE_URL: "https://abc.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "svc" });
+    expect(e.SUPABASE_SERVICE_ROLE_KEY).toBe("svc");
+  });
+  it("names the missing key without echoing values", () => {
+    expect(() => parseServiceEnv({ NEXT_PUBLIC_SUPABASE_URL: "https://abc.supabase.co" })).toThrow(/SUPABASE_SERVICE_ROLE_KEY/);
   });
 });
