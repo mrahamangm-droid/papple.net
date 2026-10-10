@@ -42,6 +42,7 @@ import { createAnalyticsService } from "./analytics/service";
 import { createApiV1 } from "./api/handler";
 import { createApiKeyService } from "./api/service";
 import { createTeamService } from "./team/service";
+import { createApprovalsService } from "./approvals/service";
 import { buildInviteEmail, createInviteMailer } from "./team/email";
 import { newInviteToken } from "./team/token";
 import { createBillingService } from "./billing/service";
@@ -437,6 +438,16 @@ export const workService = (revalidate: (path: string) => void) => createWorkSer
 });
 
 /** Team management runs through the signed-in user's own session: the database decides who may invite, change roles or remove. */
+export const approvalsService = (revalidate: (path: string) => void) => createApprovalsService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("approvals", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
+});
+
 export const teamService = (revalidate: (path: string) => void) => createTeamService({
   getUserId: async () => (await getSessionUser())?.id ?? null,
   throttle: (userId) => throttle("team", `user:${userId}`),
