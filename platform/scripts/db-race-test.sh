@@ -211,5 +211,29 @@ SLOT=$(q "select ((current_date + 10) + time '10:00') at time zone 'UTC'")
 hold; for n in 1 2 3 4 5 6; do as aaaaaa99-0000-0000-0000-0000000006b$n "select booking_request('cccccc99-0000-0000-0000-0000000006e$n','dddddd99-0000-0000-0000-0000000006d0','$SLOT','race')" & done; wait
 check "one booking under six parallel requests for the same slot" "$(q "select count(*) from bookings where provider_org_id='$O_BP'")" 1
 
+# 25. paying one booking from six tabs creates one payment row; six webhook deliveries record it once
+B_PAY=$(q "insert into bookings (provider_org_id,client_org_id,service_id,starts_at,ends_at,blocked,status,price,currency,commission_pro_bps,commission_client_bps,confirmed_at,pay_by)
+           values ('$O_BP','cccccc99-0000-0000-0000-0000000006e1','dddddd99-0000-0000-0000-0000000006d0',(current_date + 11) + time '10:00',(current_date + 11) + time '10:30',
+                   tstzrange((current_date + 11) + time '10:00',(current_date + 11) + time '10:30'),'confirmed',5000,'USD',500,200,now(),now() + interval '1 day') returning id")
+hold; for n in 1 2 3 4 5 6; do as aaaaaa99-0000-0000-0000-0000000006b1 "select booking_pay('cccccc99-0000-0000-0000-0000000006e1','$B_PAY')" & done; wait
+check "one payment row under six parallel pay calls" "$(q "select count(*) from booking_payments where booking_id='$B_PAY'")" 1
+P_PAY=$(q "select id from booking_payments where booking_id='$B_PAY'")
+hold; for n in 1 2 3 4 5 6; do svc "select record_payment_succeeded('$P_PAY','cs_r','pi_r',5100,'USD')" & done; wait
+check "a booking payment is recorded once under parallel webhooks" "$(q "select count(*) from audit_log where action='booking.paid' and entity_id='$B_PAY'")" 1
+check "and ends paid" "$(q "select status from booking_payments where id='$P_PAY'")" succeeded
+
+# 26. a webhook recording a payment just before the deadline, still committing after it, is not undone by a release that
+#     waited on the booking row (the release re-checks after the lock instead of trusting its first snapshot)
+B_LATE=$(q "insert into bookings (provider_org_id,client_org_id,service_id,starts_at,ends_at,blocked,status,price,currency,commission_pro_bps,commission_client_bps,confirmed_at,pay_by)
+            values ('$O_BP','cccccc99-0000-0000-0000-0000000006e2','dddddd99-0000-0000-0000-0000000006d0',(current_date + 12) + time '10:00',(current_date + 12) + time '10:30',
+                    tstzrange((current_date + 12) + time '10:00',(current_date + 12) + time '10:30'),'confirmed',5000,'USD',500,200,now(),now() + interval '3 seconds') returning id")
+P_LATE=$(q "insert into booking_payments (booking_id,amount,client_fee,provider_fee,client_total,application_fee,currency) values ('$B_LATE',5000,100,250,5100,350,'USD') returning id")
+psql -q -c "begin" -c "set local role service_role" -c "select record_payment_succeeded('$P_LATE','cs_late','pi_late',5100,'USD')" -c "select pg_sleep(5)" -c "commit" >/dev/null 2>>/tmp/race-errors.log &
+sleep 4
+psql -q -c "set role authenticated" -c "select set_config('request.jwt.claim.sub','aaaaaa99-0000-0000-0000-0000000006b2',false)" \
+  -c "select count(*) from booking_list('cccccc99-0000-0000-0000-0000000006e2')" >/dev/null 2>>/tmp/race-errors.log
+wait
+check "a payment committed while a release waited keeps the booking" "$(q "select b.status || ' ' || p.status from bookings b join booking_payments p on p.booking_id = b.id where b.id='$B_LATE'")" "confirmed succeeded"
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }

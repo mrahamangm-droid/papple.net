@@ -8,6 +8,7 @@ export function formatSettingValue(key: string, value: unknown): string {
   if (typeof value === "number") {
     if (unit === "bps") return `${Number((value / 100).toFixed(2))}%`;
     if (unit === "minutes") return `${value} minutes`;
+    if (unit === "hours") return `${value} hours`;
     if (unit === "days") return `${value} days`;
     if (unit === "minor") return `${value} (minor units)`;
     return String(value);

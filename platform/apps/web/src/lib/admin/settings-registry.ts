@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export type SettingUnit = "bps" | "minutes" | "days" | "minor" | "count" | "flag" | "json";
+export type SettingUnit = "bps" | "minutes" | "hours" | "days" | "minor" | "count" | "flag" | "json";
 export interface SettingDef { label: string; unit: SettingUnit; schema: z.ZodType; risky: boolean; help: string }
 
 const int = (min: number, max: number) => z.number().int().min(min).max(max);
@@ -12,6 +12,8 @@ export const SETTINGS: Record<string, SettingDef> = {
   "payments.min_application_fee_minor": { label: "Minimum Papple fee per payment", unit: "minor", schema: int(0, 1_000_000), risky: false, help: "Minor units (100 = 1.00)." },
   "contracts.min_milestone_minor": { label: "Smallest milestone", unit: "minor", schema: int(0, 100_000_000), risky: false, help: "Minor units." },
   "payments.checkout_expiry_minutes": { label: "Checkout expiry", unit: "minutes", schema: int(30, 1440), risky: false, help: "Stripe requires at least 30 minutes." },
+  "bookings.payment_window_hours": { label: "Booking payment window", unit: "hours", schema: int(1, 168), risky: false, help: "How long a client has to pay a confirmed paid booking. Never later than 1 hour before it starts." },
+  "bookings.client_refund_cutoff_hours": { label: "Booking refund cut-off", unit: "hours", schema: int(0, 720), risky: false, help: "A client who cancels a paid booking at least this long before it starts gets a full refund." },
   "reviews.reveal_after_days": { label: "Review reveal delay", unit: "days", schema: int(1, 90), risky: false, help: "A one-sided review becomes visible after this many days." },
   "contracts.max_milestones": { label: "Maximum milestones per contract", unit: "count", schema: int(1, 100), risky: false, help: "" },
   "limits.max_orgs_per_user": { label: "Maximum organizations per user", unit: "count", schema: int(1, 100), risky: false, help: "" },

@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { minorExponent, toMinor } from "../marketplace/present";
 import type { BookingFailure } from "./present";
 
 export type { BookingFailure };
 type Fail = { ok: false; code: BookingFailure };
 export type DoneResult = { ok: true } | Fail;
+export type CancelResult = { ok: true; refund: boolean; bookingId: string } | Fail;
 
 export interface BookingsDeps {
   getUserId: () => Promise<string | null>;
@@ -29,6 +31,16 @@ const decideInput = z.object({
   orgId: id, bookingId: id, confirm: z.boolean(),
   meetingUrl: z.string().trim().max(500).refine((s) => s === "" || /^https:\/\/[^\s]+$/.test(s)), reason: z.string().max(500),
 });
+const priceInput = z.object({ orgId: id, serviceId: id, price: z.string().max(20), currency: z.string().regex(/^[A-Z]{3}$/) });
+const MAX_PRICE = 10_000_000;
+/** Major-unit text -> minor units; "" is free (null). undefined when invalid: never rounds away extra decimals. */
+function priceMinor(text: string, currency: string): number | null | undefined {
+  const t = text.trim();
+  if (t === "") return null;
+  if (!/^\d+(\.\d+)?$/.test(t) || (t.split(".")[1]?.length ?? 0) > minorExponent(currency)) return undefined;
+  const minor = toMinor(Number(t), currency);
+  return Number.isSafeInteger(minor) && minor >= 1 && minor <= MAX_PRICE ? minor : undefined;
+}
 const cancelInput = z.object({ orgId: id, bookingId: id, reason: z.string().max(500).refine((s) => s.trim().length > 0) });
 
 const failure = (code?: string): BookingFailure =>
@@ -89,10 +101,21 @@ export function createBookingsService(deps: BookingsDeps) {
       return done(await run("booking_decide", { p_org: p.data.orgId, p_booking: p.data.bookingId, p_confirm: p.data.confirm,
         p_meeting_url: p.data.meetingUrl, p_reason: p.data.reason.trim() }), "/bookings");
     },
-    async cancel(raw: unknown): Promise<DoneResult> {
+    async setServicePrice(raw: unknown): Promise<DoneResult> {
+      const p = priceInput.safeParse(raw);
+      if (!p.success) return { ok: false, code: "invalid" };
+      const price = priceMinor(p.data.price, p.data.currency);
+      if (price === undefined) return { ok: false, code: "invalid" };
+      return done(await run("service_set_booking_price", { p_org: p.data.orgId, p_service: p.data.serviceId, p_price: price }), "/settings/bookings");
+    },
+    /** refund: true when the database queued a refund; the caller then sends it. */
+    async cancel(raw: unknown): Promise<CancelResult> {
       const p = cancelInput.safeParse(raw);
       if (!p.success) return { ok: false, code: "invalid" };
-      return done(await run("booking_cancel", { p_org: p.data.orgId, p_booking: p.data.bookingId, p_reason: p.data.reason.trim() }), "/bookings");
+      const r = await run("booking_cancel", { p_org: p.data.orgId, p_booking: p.data.bookingId, p_reason: p.data.reason.trim() });
+      if (!r.ok) return r;
+      deps.revalidate("/bookings");
+      return { ok: true, refund: r.data === "refund_pending", bookingId: p.data.bookingId };
     },
   };
 }

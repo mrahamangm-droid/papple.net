@@ -8,6 +8,8 @@ interface Deps {
   db: Pick<PaymentsServiceDb, "recordPaymentSucceeded" | "recordPaymentFailed" | "recordAccountUpdate" | "recordRefundSucceeded" | "recordSubscription">;
   /** Called for outcomes a human must look at (never carries the signature or raw body). */
   alert: (message: string, context: Record<string, unknown>) => void;
+  /** Runs after a payment was recorded for something already cancelled (bookings send the queued refund). Best effort. */
+  onPaidOnCancelled?: (paymentId: string) => Promise<unknown>;
 }
 
 const NEEDS_ATTENTION = new Set(["mismatch", "duplicate_charge", "unknown", "paid_on_cancelled", "unknown_org", "unknown_plan", "conflict"]);
@@ -26,6 +28,7 @@ export function createWebhookHandler(deps: Deps) {
       return { status: 400 };
     }
     if (event.kind === "ignored") return { status: 200 };
+    let refundFor: string | null = null;
     try {
       await processOnce(deps.store, "stripe", event.id, async () => {
         if (event.kind === "payment_succeeded") {
@@ -33,6 +36,7 @@ export function createWebhookHandler(deps: Deps) {
             paymentId: event.paymentId, sessionId: event.sessionId, intentId: event.intentId, amountTotal: event.amountTotal, currency: event.currency,
           });
           if (NEEDS_ATTENTION.has(result)) deps.alert(`payment webhook outcome: ${result}`, { eventId: event.id, paymentId: event.paymentId });
+          if (result === "paid_on_cancelled") refundFor = event.paymentId;
         } else if (event.kind === "payment_failed") {
           await deps.db.recordPaymentFailed(event.paymentId, event.sessionId);
         } else if (event.kind === "refund_succeeded") {
@@ -51,6 +55,8 @@ export function createWebhookHandler(deps: Deps) {
     } catch {
       return { status: 500 };
     }
+    // Outside the claim: the payment is recorded either way, and a failed send stays pending for Retry refund.
+    if (refundFor && deps.onPaidOnCancelled) await deps.onPaidOnCancelled(refundFor).catch(() => undefined);
     return { status: 200 };
   };
 }
