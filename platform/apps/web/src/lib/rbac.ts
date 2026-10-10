@@ -51,7 +51,7 @@ export function navFor(ctx: AuthContext): NavItem[] {
   // Provider tools follow membership (what the database will actually allow), never the persona label.
   if (ctx.memberships.length > 0) items.push({ href: "/profile", label: "My profile" }, { href: "/services", label: "My services" });
   if (ctx.memberships.length > 0) items.push({ href: "/contracts", label: "Contracts" }, { href: "/settings/payouts", label: "Payouts" });
-  if (ctx.memberships.length > 0) items.push({ href: "/crm", label: "CRM" }, { href: "/talent", label: "Talent pools" }, { href: "/invitations", label: "Invitations" }, { href: "/settings/team", label: "Team" });
+  if (ctx.memberships.length > 0) items.push({ href: "/crm", label: "CRM" }, { href: "/talent", label: "Talent pools" }, { href: "/invitations", label: "Invitations" }, { href: "/bookings", label: "Bookings" }, { href: "/settings/team", label: "Team" });
   if (ctx.memberships.some((m) => m.role === "owner" || m.role === "admin")) items.push({ href: "/approvals", label: "Approvals" }, { href: "/settings/invoicing", label: "Invoicing" }, { href: "/settings/credentials", label: "Credentials" }, { href: "/analytics", label: "Analytics" });
   if (ctx.memberships.some((m) => m.role === "owner")) items.push({ href: "/settings/billing", label: "Billing" }, { href: "/settings/api-keys", label: "API keys" });
   if (ctx.platformRoles.includes("admin")) items.push({ href: "/admin", label: "Admin" });

@@ -1,5 +1,5 @@
 begin;
-select plan(58);
+select plan(64);
 
 insert into auth.users (id, email) values
  ('aaaaaa43-0000-0000-0000-0000000000a1','p@x.test'),('aaaaaa43-0000-0000-0000-0000000000a2','pa@x.test'),('aaaaaa43-0000-0000-0000-0000000000a3','pm@x.test'),('aaaaaa43-0000-0000-0000-0000000000a4','c@x.test'),('aaaaaa43-0000-0000-0000-0000000000a5','cm@x.test'),('aaaaaa43-0000-0000-0000-0000000000a6','cv@x.test'),('aaaaaa43-0000-0000-0000-0000000000a7','d@x.test'),('aaaaaa43-0000-0000-0000-0000000000a8','s@x.test');
@@ -51,6 +51,12 @@ reset role; update booking_settings set horizon_days = 30 where org_id = 'cccccc
 select is(pg_temp.mon_slots(), '', 'slots beyond how far ahead people can book are not offered');
 reset role; update booking_settings set horizon_days = 90 where org_id = 'cccccc43-0000-0000-0000-0000000000b1'; set local role authenticated;
 
+select is(booking_offer('dddddd43-0000-0000-0000-000000000001'), 30, 'a client learns the published service is bookable in 30 minute slots');
+select is(booking_offer('dddddd43-0000-0000-0000-000000000002'), null::int, 'a draft service is not offered');
+reset role; set local role anon;
+select is(booking_offer('dddddd43-0000-0000-0000-000000000001'), 30, 'a signed-out visitor can see that the service takes bookings');
+reset role; set local role authenticated;
+
 -- 4. requesting
 select lives_ok($$select set_config('t.b1', booking_request('cccccc43-0000-0000-0000-0000000000c1','dddddd43-0000-0000-0000-000000000001', pg_temp.at('09:30'), 'Hello')::text, false)$$, 'a client member requests 09:30');
 select is((select status from bookings where id = current_setting('t.b1')::uuid), 'pending', 'the booking is pending');
@@ -69,6 +75,13 @@ select throws_ok($$select booking_request('cccccc43-0000-0000-0000-0000000000b1'
 select set_config('request.jwt.claim.sub','aaaaaa43-0000-0000-0000-0000000000a7',true);
 select throws_ok($$select booking_request('cccccc43-0000-0000-0000-0000000000d1','dddddd43-0000-0000-0000-000000000001', pg_temp.at('10:01'), '')$$, '22023', null, 'a start off the slot grid is refused');
 select throws_ok($$select booking_request('cccccc43-0000-0000-0000-0000000000d1','dddddd43-0000-0000-0000-000000000001', now() - interval '1 day', '')$$, '22023', null, 'a start in the past is refused');
+
+select set_config('request.jwt.claim.sub','aaaaaa43-0000-0000-0000-0000000000a6',true);
+select is((select service_title || ' / ' || other_org_name || ' / ' || side from booking_list('cccccc43-0000-0000-0000-0000000000c1') where id = current_setting('t.b1')::uuid), 'Intro call / Provider / client', 'a client viewer lists the booking with the service and the professional');
+select set_config('request.jwt.claim.sub','aaaaaa43-0000-0000-0000-0000000000a3',true);
+select is((select other_org_name || ' / ' || side || ' / ' || note from booking_list('cccccc43-0000-0000-0000-0000000000b1') where id = current_setting('t.b1')::uuid), 'Client / provider / Hello', 'the provider lists it with the client and the note');
+select set_config('request.jwt.claim.sub','aaaaaa43-0000-0000-0000-0000000000a7',true);
+select throws_ok($$select * from booking_list('cccccc43-0000-0000-0000-0000000000c1')$$, '42501', null, 'another organization cannot list them');
 
 -- 5. buffer
 reset role; update booking_settings set buffer_minutes = 30 where org_id = 'cccccc43-0000-0000-0000-0000000000b1'; set local role authenticated;

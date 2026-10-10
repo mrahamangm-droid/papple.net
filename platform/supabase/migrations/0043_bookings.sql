@@ -150,6 +150,31 @@ begin
     order by c;
 end $$;
 
+-- What a client may know before booking: the slot length when the service is published, bookable and switched on.
+create function public.booking_offer(p_service uuid) returns int
+language sql stable security definer set search_path = public as
+$$ select s.booking_minutes from services s join booking_settings b on b.org_id = s.org_id and b.enabled
+   where s.id = p_service and s.status = 'published' and s.booking_minutes is not null $$;
+
+-- An organization's bookings on both sides, with the service title and the other organization's name
+-- (neither is otherwise readable across organizations). Members of p_org only; the person who booked stays private.
+create function public.booking_list(p_org uuid) returns table (
+  id uuid, side text, service_title text, other_org_name text, starts_at timestamptz, ends_at timestamptz,
+  status text, note text, meeting_url text, reason text, cancelled_by_org uuid, created_at timestamptz)
+language plpgsql stable security definer set search_path = public as
+$$ begin
+  if auth.uid() is null or not public.is_member(p_org) then raise exception 'not allowed' using errcode = '42501'; end if;
+  return query
+    select b.id, case when b.provider_org_id = p_org then 'provider' else 'client' end, coalesce(s.title, 'Service'),
+           o.name, b.starts_at, b.ends_at, b.status, b.note, b.meeting_url, b.reason, b.cancelled_by_org, b.created_at
+    from bookings b
+    left join services s on s.id = b.service_id
+    join organizations o on o.id = case when b.provider_org_id = p_org then b.client_org_id else b.provider_org_id end
+    where p_org in (b.provider_org_id, b.client_org_id)
+    order by b.starts_at desc
+    limit 500;
+end $$;
+
 create function public.booking_request(p_org uuid, p_service uuid, p_start timestamptz, p_note text) returns uuid
 language plpgsql security definer set search_path = public as
 $$ declare v_svc services; v_set booking_settings; v_note text := btrim(coalesce(p_note, '')); v_cap int; v_id uuid; m record;
@@ -230,7 +255,9 @@ end $$;
 revoke execute on function public.booking_audit(uuid, text, uuid, jsonb), public.booking_candidates(uuid, int, timestamptz, timestamptz) from public, anon, authenticated;
 revoke execute on function public.booking_settings_save(uuid, boolean, text, int, int, int, jsonb), public.service_set_booking(uuid, uuid, int),
   public.booking_slots(uuid, timestamptz, timestamptz), public.booking_request(uuid, uuid, timestamptz, text),
-  public.booking_decide(uuid, uuid, boolean, text, text), public.booking_cancel(uuid, uuid, text) from public, anon;
+  public.booking_decide(uuid, uuid, boolean, text, text), public.booking_cancel(uuid, uuid, text), public.booking_offer(uuid), public.booking_list(uuid) from public, anon;
 grant execute on function public.booking_settings_save(uuid, boolean, text, int, int, int, jsonb), public.service_set_booking(uuid, uuid, int),
   public.booking_slots(uuid, timestamptz, timestamptz), public.booking_request(uuid, uuid, timestamptz, text),
-  public.booking_decide(uuid, uuid, boolean, text, text), public.booking_cancel(uuid, uuid, text) to authenticated;
+  public.booking_decide(uuid, uuid, boolean, text, text), public.booking_cancel(uuid, uuid, text), public.booking_offer(uuid), public.booking_list(uuid) to authenticated;
+-- whether a service takes bookings is public (it decides if the service page shows a booking prompt)
+grant execute on function public.booking_offer(uuid) to anon;

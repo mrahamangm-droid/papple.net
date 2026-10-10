@@ -4,7 +4,7 @@ Updated 2026-10-10. CI now runs this app's lint, typecheck, unit tests and build
 
 ## Where we are
 
-Built and locally tested: identity and tenancy, marketplace, contracts and payments, disputes and reviews, admin console and moderation, AI copilot, billing, invoicing, CRM, team, credentials, talent pools, analytics, read-only API, contract tasks, time and files, spend approvals (new, on a branch until reviewed), legal pages and SEO.
+Built and locally tested: identity and tenancy, marketplace, contracts and payments, disputes and reviews, admin console and moderation, AI copilot, billing, invoicing, CRM, team, credentials, talent pools, analytics, read-only API, contract tasks, time and files, spend approvals, bookings (new, on a branch until reviewed), legal pages and SEO.
 
 Not live: no deployed site exists. GitHub `main` is complete; the staging database is loaded; the Vercel staging project exists but has no deployment, most likely because the owning Vercel team has a failed-payment notice (owner action).
 
@@ -28,6 +28,6 @@ The master prompt asks for eight documents. Names are adapted to the repository'
 1. Owner: resolve the Vercel payment notice; add the Supabase keys and `NEXT_PUBLIC_SITE_URL` in Vercel; deploy.
 2. Run the staging run-through (shared doc) with two test accounts: credentials, talent pools, analytics, API keys.
 3. Owner items in `docs/launch-checklist.md` (legal review, Stripe, Resend, security contact).
-4. Contract tasks, time records and shared files (`/contracts/[id]/work`) are merged (#42). Spend approvals (procurement slice 1) is built and awaiting merge. Next to build: document AI, workflow automation, bookings, further procurement (multi-step chains, budgets).
+4. Bookings (slice 1) is built and awaiting merge. Next to build: document AI (needs the owner's privacy decision first), workflow automation, further procurement (multi-step chains, budgets), paid bookings.
 
 Deployed commit SHA: none (not deployed). Verified production status: none.

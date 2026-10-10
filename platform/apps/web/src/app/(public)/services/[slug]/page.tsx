@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BookingPanel } from "@/components/bookings/BookingPanel";
 import { ContactPanel } from "@/components/marketplace/ContactPanel";
 import { JsonLd } from "@/components/marketplace/JsonLd";
 import { fromMinor, minorExponent, priceLabel } from "@/lib/marketplace/present";
@@ -40,6 +41,7 @@ export default async function ServicePage({ params }: PageProps<"/services/[slug
       <p className="mt-1">by <Link href={`/p/${s.provider_slug}`} className="underline">{s.provider_name}</Link> — {s.provider_headline}</p>
       <p className="mt-2 text-sm opacity-70">{[priceLabel(s), s.delivery_days ? `${s.delivery_days} day delivery` : null].filter(Boolean).join(" · ")}</p>
       {s.description && <p className="mt-6 whitespace-pre-line">{s.description}</p>}
+      <BookingPanel serviceId={s.id} path={`/services/${s.slug}`} />
       <ContactPanel kind="service" refId={s.id} path={`/services/${s.slug}`} />
     </main>
   );
