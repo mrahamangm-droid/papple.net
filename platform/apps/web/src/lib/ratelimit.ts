@@ -30,6 +30,7 @@ export const RULES = {
   talent: { limit: 60, windowSec: 60 },
   work: { limit: 60, windowSec: 60 },
   approvals: { limit: 30, windowSec: 60 },
+  bookings: { limit: 30, windowSec: 60 },
   analytics: { limit: 30, windowSec: 60 },
   apikeys: { limit: 20, windowSec: 60 },
   apiv1: { limit: 60, windowSec: 60 },

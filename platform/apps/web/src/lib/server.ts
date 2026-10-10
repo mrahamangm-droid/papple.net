@@ -43,6 +43,7 @@ import { createApiV1 } from "./api/handler";
 import { createApiKeyService } from "./api/service";
 import { createTeamService } from "./team/service";
 import { createApprovalsService } from "./approvals/service";
+import { createBookingsService } from "./bookings/service";
 import { buildInviteEmail, createInviteMailer } from "./team/email";
 import { newInviteToken } from "./team/token";
 import { createBillingService } from "./billing/service";
@@ -435,6 +436,17 @@ export const workService = (revalidate: (path: string) => void) => createWorkSer
     return { error: error ? { code: error.code } : null };
   },
   newId: () => randomUUID(),
+});
+
+/** Bookings run as the signed-in user: the database decides who may book, confirm or cancel, and which slots exist. */
+export const bookingsService = (revalidate: (path: string) => void) => createBookingsService({
+  getUserId: async () => (await getSessionUser())?.id ?? null,
+  throttle: (userId) => throttle("bookings", `user:${userId}`),
+  rpc: async (fn, args) => {
+    const { data, error } = await userRpc(fn, args);
+    return { data, error: error ? { code: error.code } : null };
+  },
+  revalidate,
 });
 
 /** Spend approvals also run as the signed-in user: the database decides who may set the rule, decide or withdraw. */

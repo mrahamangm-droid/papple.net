@@ -195,5 +195,21 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 check "no deadlock between approve and re-accept" "$(grep -c 'deadlock detected' /tmp/race-errors.log)" 0
 
+# 24. six clients grabbing the same booking slot at once get exactly one booking
+U_BP=aaaaaa99-0000-0000-0000-0000000006a0; O_BP=cccccc99-0000-0000-0000-0000000006c0
+q "insert into auth.users (id,email) values ('$U_BP','bp@r.test'); insert into organizations (id,type,name) values ('$O_BP','agency','Booking Pro');
+   insert into memberships (user_id,org_id,role) values ('$U_BP','$O_BP','owner');
+   insert into provider_profiles (org_id,slug,headline) values ('$O_BP','race-booking-pro','Race booking pro');
+   insert into services (id,org_id,slug,title,status,booking_minutes) values ('dddddd99-0000-0000-0000-0000000006d0','$O_BP','race-booking','Race booking','published',30);
+   insert into booking_settings (org_id,enabled,timezone,buffer_minutes,min_notice_hours,horizon_days) values ('$O_BP',true,'UTC',0,0,90);
+   insert into booking_hours (org_id,weekday,start_time,end_time) select '$O_BP', g, '09:00', '17:00' from generate_series(1,7) g;"
+for n in 1 2 3 4 5 6; do
+  q "insert into auth.users (id,email) values ('aaaaaa99-0000-0000-0000-0000000006b$n','bc$n@r.test'); insert into organizations (id,type,name) values ('cccccc99-0000-0000-0000-0000000006e$n','client_company','Booking Client $n');
+     insert into memberships (user_id,org_id,role) values ('aaaaaa99-0000-0000-0000-0000000006b$n','cccccc99-0000-0000-0000-0000000006e$n','owner')"
+done
+SLOT=$(q "select ((current_date + 10) + time '10:00') at time zone 'UTC'")
+hold; for n in 1 2 3 4 5 6; do as aaaaaa99-0000-0000-0000-0000000006b$n "select booking_request('cccccc99-0000-0000-0000-0000000006e$n','dddddd99-0000-0000-0000-0000000006d0','$SLOT','race')" & done; wait
+check "one booking under six parallel requests for the same slot" "$(q "select count(*) from bookings where provider_org_id='$O_BP'")" 1
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }
