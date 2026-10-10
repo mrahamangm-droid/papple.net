@@ -25,6 +25,13 @@ export function acceptBudgetWarning(s: BudgetStatus | null, price: number, curre
   return isOwner ? `${by}.` : `${by}, so it will be sent to an owner for approval.`;
 }
 
+/** Next to Approve: reasons are fixed when a request is made, so the budget may have filled up since. Approval never re-checks. */
+export function approveBudgetWarning(s: BudgetStatus | null, price: number, currency: string): string | null {
+  if (!live(s)) return null;
+  if (currency !== s.currency) return `This contract is in ${currency}, so it is not counted against the ${s.currency} budget.`;
+  return price <= s.remaining ? null : `Approving this goes over the budget by ${formatMinor(price - Math.max(s.remaining, 0), s.currency)}.`;
+}
+
 /** Paid bookings count but are never blocked; the client just hears about it first. */
 export function bookingBudgetWarning(s: BudgetStatus | null, price: number, currency: string): string | null {
   if (!live(s) || currency !== s.currency || price <= s.remaining) return null;

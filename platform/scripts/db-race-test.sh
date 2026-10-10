@@ -254,5 +254,31 @@ hold; as $U_BA1 "select accept_contract('$O_BC','dddddd99-0000-0000-0000-0000000
 check "only one of two parallel acceptances fits the budget" "$(q "select count(*) from contracts where client_org_id='$O_BC' and accepted_by_client")" 1
 check "the other waits for an owner" "$(q "select count(*) from spend_requests where org_id='$O_BC' and status='pending' and reasons = '{budget}'")" 1
 
+# 28. an owner approving a request while an admin accepts another contract: the approval queues on the budget lock too,
+#     so the admin's count includes it and the admin cannot go over the budget alone
+O_BC2=cccccc99-0000-0000-0000-0000000008c1; U_BO2=aaaaaa99-0000-0000-0000-0000000008a1; U_BA3=aaaaaa99-0000-0000-0000-0000000008a2; U_BA4=aaaaaa99-0000-0000-0000-0000000008a3
+q "insert into auth.users (id,email) values ('$U_BO2','bo2@r.test'),('$U_BA3','ba3@r.test'),('$U_BA4','ba4@r.test');
+   insert into organizations (id,type,name) values ('$O_BC2','client_company','Budget Client 2');
+   insert into memberships (user_id,org_id,role) values ('$U_BO2','$O_BC2','owner'),('$U_BA3','$O_BC2','admin'),('$U_BA4','$O_BC2','admin');
+   insert into projects (id,org_id,title,description,currency,status)
+     select ('eeeeee99-0000-0000-0000-00000000080' || g)::uuid,'$O_BC2','Budget project '||g,'Detailed description','USD','open' from generate_series(1,2) g;
+   insert into proposals (id,project_id,org_id,cover_letter,price,currency,delivery_days,status)
+     select ('ffffff99-0000-0000-0000-00000000080' || g)::uuid,('eeeeee99-0000-0000-0000-00000000080' || g)::uuid,'$O_PRO','Offer',1000,'USD',10,'shortlisted' from generate_series(1,2) g;
+   insert into contracts (id,project_id,proposal_id,client_org_id,provider_org_id,title,price,currency,commission_pro_bps,commission_client_bps)
+     values ('dddddd99-0000-0000-0000-000000000801','eeeeee99-0000-0000-0000-000000000801','ffffff99-0000-0000-0000-000000000801','$O_BC2','$O_PRO','Approved one',6000,'USD',500,200),
+            ('dddddd99-0000-0000-0000-000000000802','eeeeee99-0000-0000-0000-000000000802','ffffff99-0000-0000-0000-000000000802','$O_BC2','$O_PRO','Accepted one',4900,'USD',500,200);
+   insert into milestones (contract_id,position,title,amount) values ('dddddd99-0000-0000-0000-000000000801',1,'All',6000),('dddddd99-0000-0000-0000-000000000802',1,'All',4900);
+   insert into budgets (org_id,enabled,period,amount_minor,currency) values ('$O_BC2',true,'quarter',10000,'USD');
+   insert into spend_policies (org_id,enabled,threshold_minor,currency) values ('$O_BC2',true,5000,'USD');"
+as $U_BA3 "select accept_contract('$O_BC2','dddddd99-0000-0000-0000-000000000801')"
+R28=$(q "select id from spend_requests where contract_id='dddddd99-0000-0000-0000-000000000801' and status='pending'")
+psql -q -c "begin" -c "set local role authenticated" -c "select set_config('request.jwt.claim.sub','$U_BO2',true)" \
+  -c "select spend_request_decide('$O_BC2','$R28',true,'')" -c "select pg_sleep(3)" -c "commit" >/dev/null 2>>/tmp/race-errors.log &
+sleep 1
+as $U_BA4 "select accept_contract('$O_BC2','dddddd99-0000-0000-0000-000000000802')"
+wait
+check "an admin accepting during an owner's approval counts it" "$(q "select count(*) from spend_requests where contract_id='dddddd99-0000-0000-0000-000000000802' and status='pending' and reasons='{budget}'")" 1
+check "and only the approved contract is accepted" "$(q "select string_agg(title, ',') from contracts where client_org_id='$O_BC2' and accepted_by_client")" "Approved one"
+
 psql -qAt -d postgres -c "drop database if exists papple_race" >/dev/null
 [ $fail -eq 0 ] && echo "RACE TESTS PASSED" || { echo "RACE TESTS FAILED"; exit 1; }

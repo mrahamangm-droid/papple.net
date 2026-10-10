@@ -1,5 +1,5 @@
 begin;
-select plan(47);
+select plan(50);
 
 insert into auth.users (id, email) values
  ('aaaaaa45-0000-0000-0000-0000000000a1','o@x.test'),('aaaaaa45-0000-0000-0000-0000000000a2','a1@x.test'),('aaaaaa45-0000-0000-0000-0000000000a3','a2@x.test'),
@@ -65,6 +65,9 @@ select throws_ok($$update budgets set amount_minor = 1$$, '42501', null, 'budget
 select is(accept_contract('cccccc45-0000-0000-0000-0000000000c1', pg_temp.k(1)), 'accepted', 'an admin accepts within the budget');
 select ok((select client_accepted_at is not null from contracts where id = pg_temp.k(1)), 'the acceptance time is recorded');
 select is((budget_status('cccccc45-0000-0000-0000-0000000000c1')->>'spent')::int, 4000, 'it counts');
+reset role; update contracts set client_accepted_at = now() - interval '1 day' where id = pg_temp.k(1); set local role authenticated;
+select is(accept_contract('cccccc45-0000-0000-0000-0000000000c1', pg_temp.k(1)), 'accepted', 'accepting an accepted contract again is a no-op');
+select ok((select client_accepted_at < now() - interval '23 hours' from contracts where id = pg_temp.k(1)), 'and does not move its acceptance time or count it twice');
 select is(accept_contract('cccccc45-0000-0000-0000-0000000000c1', pg_temp.k(2)), 'approval_requested', 'an admin going over the budget needs an owner');
 select is((select reasons from spend_requests where contract_id = pg_temp.k(2) and status = 'pending'), '{budget}'::text[], 'the request says why');
 select ok((select not accepted_by_client from contracts where id = pg_temp.k(2)), 'and the contract is not accepted');
@@ -138,7 +141,9 @@ select is((select budget_status('cccccc45-0000-0000-0000-0000000000c2')->>'other
 select is((select budget_status('cccccc45-0000-0000-0000-0000000000c2')->>'spent')::int, 7700, 'spent is contracts plus bookings');
 
 reset role;
-select is((select count(distinct action)::int from audit_log where action = 'budget.set' and org_id = 'cccccc45-0000-0000-0000-0000000000c1'), 1, 'budget changes are audited');
+select is((select count(*)::int from audit_log where action = 'budget.set' and org_id = 'cccccc45-0000-0000-0000-0000000000c1'), 4, 'every budget change is audited');
+select is((select before->>'enabled' || '>' || (after->>'enabled') from audit_log where action = 'budget.set' and org_id = 'cccccc45-0000-0000-0000-0000000000c1' order by id desc limit 1),
+  'true>false', 'with what changed');
 
 select * from finish();
 rollback;

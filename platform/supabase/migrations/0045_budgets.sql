@@ -85,7 +85,8 @@ begin
 end $$;
 
 -- As 0041, plus: the budget check (under an advisory lock per organization, so parallel acceptances queue and each counts
--- the others), one request carrying its reasons, and client_accepted_at.
+-- the others), one request carrying its reasons, and client_accepted_at. The count runs in a new statement after the lock,
+-- which sees work committed meanwhile under READ COMMITTED (the default, and what PostgREST uses).
 create or replace function public.accept_contract(p_org uuid, p_contract uuid) returns text
 language plpgsql security definer set search_path = public as
 $$ declare v_c contracts%rowtype; v_sum bigint; v_pol spend_policies; v_req spend_requests; v_hash text; v_id uuid; m record;
@@ -98,6 +99,8 @@ begin
   if v_c.status <> 'draft' then raise exception 'contract is not editable' using errcode = '22023'; end if;
   select coalesce(sum(amount), 0) into v_sum from milestones where contract_id = p_contract;
   if v_sum <> v_c.price then raise exception 'milestones must add up to the contract price' using errcode = '22023'; end if;
+  -- already accepted by this side: nothing to do (counting it again, or moving its acceptance time, would distort the budget)
+  if (p_org = v_c.client_org_id and v_c.accepted_by_client) or (p_org = v_c.provider_org_id and v_c.accepted_by_provider) then return 'accepted'; end if;
   if p_org = v_c.client_org_id then
     select * into v_bud from budgets where org_id = p_org and enabled;
     -- every client acceptance under a budget queues here (owners too), so an admin's count includes them
@@ -141,7 +144,8 @@ begin
   return 'accepted';
 end $$;
 
--- As 0042, plus client_accepted_at on approval.
+-- As 0042, plus client_accepted_at on approval, and the budget lock: an approval is an acceptance too, so an admin accepting
+-- at the same time must count it. Order: contract, budget lock, request (the order accept_contract uses).
 create or replace function public.spend_request_decide(p_org uuid, p_request uuid, p_approve boolean, p_note text) returns text
 language plpgsql security definer set search_path = public as
 $$ declare v_req spend_requests; v_c contracts%rowtype; v_sum bigint; v_note text := btrim(coalesce(p_note, '')); v_contract uuid;
@@ -151,6 +155,8 @@ begin
   if v_contract is null then raise exception 'not allowed' using errcode = '42501'; end if;
   -- contract first, then request: the order accept_contract uses
   select * into v_c from contracts where id = v_contract for update;
+  if p_approve and exists (select 1 from budgets where org_id = p_org and enabled) then
+    perform pg_advisory_xact_lock(hashtextextended('budget:' || p_org::text, 0)); end if;
   select * into v_req from spend_requests where id = p_request for update;
   -- nobody decides their own request, including an admin who was promoted to owner since
   if v_req.requested_by = auth.uid() then raise exception 'not allowed' using errcode = '42501'; end if;

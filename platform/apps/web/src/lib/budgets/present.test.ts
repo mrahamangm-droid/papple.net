@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptBudgetWarning, bookingBudgetWarning, budgetMeter, budgetSummary, requestReasonLabels } from "./present";
+import { acceptBudgetWarning, approveBudgetWarning, bookingBudgetWarning, budgetMeter, budgetSummary, requestReasonLabels } from "./present";
 import type { BudgetStatus } from "./service";
 
 const S: BudgetStatus = {
@@ -57,5 +57,14 @@ describe("labels", () => {
     expect(budgetSummary({ enabled: true, period: "month", amount_minor: 500000, currency: "USD" }))
       .toBe("Budget: $5,000.00 per month. An admin accepting a contract that goes over it, or one in another currency, needs an owner's approval.");
     expect(budgetSummary(null)).toBe("No budget. Spending is not limited by period.");
+  });
+});
+
+describe("approveBudgetWarning", () => {
+  it("tells an owner when approving goes over, whatever the request's original reason", () => {
+    expect(approveBudgetWarning(S, 500000, "USD")).toBe("Approving this goes over the budget by $1,200.00.");
+    expect(approveBudgetWarning(S, 1000, "USD")).toBeNull();
+    expect(approveBudgetWarning(S, 1000, "EUR")).toBe("This contract is in EUR, so it is not counted against the USD budget.");
+    expect(approveBudgetWarning(null, 500000, "USD")).toBeNull();
   });
 });

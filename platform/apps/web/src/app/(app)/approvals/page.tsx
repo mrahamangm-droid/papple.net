@@ -7,7 +7,7 @@ import { canDecide, canWithdraw, isManager, requestStatusLabel } from "@/lib/app
 import { requireCapability } from "@/lib/auth-context";
 import { BudgetMeter } from "@/components/budgets/BudgetMeter";
 import { loadBudgetStatus } from "@/lib/budgets/load";
-import { requestReasonLabels } from "@/lib/budgets/present";
+import { approveBudgetWarning, requestReasonLabels } from "@/lib/budgets/present";
 import { formatMinor } from "@/lib/marketplace/present";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -57,6 +57,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
           <li key={r.id} className="space-y-2 py-3 text-sm">
             <p>{title(r)}: <strong>{formatMinor(r.price, r.currency)}</strong>, requested by {who(r.requested_by)} on {day(r.created_at)}</p>
             {why(r) && <p className="text-neutral-600 dark:text-neutral-400">Why: {why(r)}</p>}
+            {approveBudgetWarning(budget, r.price, r.currency) && <p className="text-amber-800 dark:text-amber-300">{approveBudgetWarning(budget, r.price, r.currency)}</p>}
             <div className="flex flex-wrap gap-4">
               {canDecide(role, r.requested_by, ctx.userId) && <DecideButtons orgId={orgId} requestId={r.id} contractId={r.contract_id} />}
               {canWithdraw(role, r.requested_by, ctx.userId) && <WithdrawButton orgId={orgId} requestId={r.id} contractId={r.contract_id} />}
