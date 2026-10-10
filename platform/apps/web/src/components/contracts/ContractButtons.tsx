@@ -20,10 +20,10 @@ export function HireButton({ orgId, proposalId, projectId }: { orgId: string; pr
   );
 }
 
-export function ContractControls({ orgId, contractId, can }: { orgId: string; contractId: string; can: { accept: boolean; activate: boolean; cancel: boolean } }) {
+export function ContractControls({ orgId, contractId, can, isOwner = false }: { orgId: string; contractId: string; can: { accept: boolean; activate: boolean; cancel: boolean }; isOwner?: boolean }) {
   const router = useRouter();
   const [notice, setNotice] = useState("");
-  const { pending, error, run } = useContractAction((r) => { setNotice(acceptOutcomeMessage(r.outcome) ?? ""); router.refresh(); });
+  const { pending, error, run } = useContractAction((r) => { setNotice(acceptOutcomeMessage(r.outcome, isOwner) ?? ""); router.refresh(); });
   return (
     <div className="flex flex-wrap items-center gap-2">
       {can.accept && <button disabled={pending} onClick={() => run(() => acceptContractAction({ orgId, contractId }))} className={btn}>Accept terms</button>}

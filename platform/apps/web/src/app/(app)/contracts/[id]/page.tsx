@@ -39,7 +39,7 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
     db.from("invoices").select("id, milestone_id, kind, credits_invoice_id, number").eq("contract_id", id),
     db.from("payments").select("milestone_id, status").eq("contract_id", id),
     // RLS returns rows only to the client organization's owners and admins
-    db.from("spend_requests").select("id").eq("contract_id", id).eq("status", "pending").limit(1),
+    db.from("spend_requests").select("id, approvals_required, spend_approvals(approver_id)").eq("contract_id", id).eq("status", "pending").limit(1),
   ]);
   const invoiceOf = new Map((invs ?? []).filter((i) => i.kind === "invoice").map((i) => [i.milestone_id as string, i]));
   const creditOf = new Map((invs ?? []).filter((i) => i.kind === "credit_note").map((i) => [i.credits_invoice_id as string, i]));
@@ -66,7 +66,7 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
       {who?.slug && <p className="mt-1 text-sm"><Link className="underline" href={`/p/${who.slug as string}`}>View professional profile</Link></p>}
       {(approvalWait ?? []).length > 0 && (
         <p role="status" className="mt-3 rounded-md border border-amber-400 px-3 py-2 text-sm">
-          Awaiting owner approval. An admin accepted these terms and your organization&apos;s approval rule or budget needs an owner to approve them. <Link className="underline" href={`/approvals?org=${c.client_org_id as string}`}>Open approvals</Link>
+          Awaiting owner approval ({((approvalWait![0] as unknown as { spend_approvals: unknown[] }).spend_approvals ?? []).length} of {(approvalWait![0] as { approvals_required: number }).approvals_required}). These terms were accepted, and your organization&apos;s approval rule or budget needs owners to approve them. <Link className="underline" href={`/approvals?org=${c.client_org_id as string}`}>Open approvals</Link>
         </p>
       )}
       {view && <div className="mt-4 max-w-2xl"><PaymentNotice side={view.side} /></div>}
@@ -120,7 +120,7 @@ export default async function ContractPage({ params, searchParams }: PageProps<"
         <section className="mt-6" aria-label="Contract actions">
           <BudgetMeter status={budget} />
           {budgetWarning && <p role="status" className="mt-2 max-w-2xl rounded-md border border-amber-400 px-3 py-2 text-sm">{budgetWarning}</p>}
-          <ContractControls orgId={view.orgId} contractId={id} can={can} />
+          <ContractControls orgId={view.orgId} contractId={id} can={can} isOwner={view.role === "owner"} />
           {c.status === "draft" && view.side === "provider" && <p className="mt-2 text-sm">To start, you must finish <Link className="underline" href="/settings/payouts">payout setup</Link>.</p>}
         </section>
       )}

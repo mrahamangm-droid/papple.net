@@ -4,7 +4,7 @@ Updated 2026-10-10. CI now runs this app's lint, typecheck, unit tests and build
 
 ## Where we are
 
-Built and locally tested: identity and tenancy, marketplace, contracts and payments, disputes and reviews, admin console and moderation, AI copilot, billing, invoicing, CRM, team, credentials, talent pools, analytics, read-only API, contract tasks, time and files, spend approvals, budgets, bookings, paid bookings, legal pages and SEO. Plan prices 29.99 / 49.99 / 99.99 a month with a 30-day free trial are on a branch until reviewed.
+Built and locally tested: identity and tenancy, marketplace, contracts and payments, disputes and reviews, admin console and moderation, AI copilot, billing, invoicing, CRM, team, credentials, talent pools, analytics, read-only API, contract tasks, time and files, spend approvals, budgets, approval tiers (new, on a branch until reviewed), bookings, paid bookings, legal pages and SEO. Plan prices 29.99 / 49.99 / 99.99 a month with a 30-day free trial are on a branch until reviewed.
 
 Not live: no deployed site exists. GitHub `main` is complete; the staging database is loaded; the Vercel staging project exists but has no deployment, most likely because the owning Vercel team has a failed-payment notice (owner action).
 
@@ -28,6 +28,6 @@ The master prompt asks for eight documents. Names are adapted to the repository'
 1. Owner: resolve the Vercel payment notice; add the Supabase keys and `NEXT_PUBLIC_SITE_URL` in Vercel; deploy.
 2. Run the staging run-through (shared doc) with two test accounts: credentials, talent pools, analytics, API keys.
 3. Owner items in `docs/launch-checklist.md` (legal review, Stripe, Resend, security contact).
-4. New plan prices and the free trial (migration 0046) await merge; the owner then creates the three Stripe Prices (`docs/launch-checklist.md`). Budgets and paid bookings are merged; paid bookings and needs Stripe test keys on staging to try end to end. Next to build: document AI (needs the owner's privacy decision first), workflow automation, multi-step approval chains.
+4. New plan prices and the free trial (migration 0046) await merge; the owner then creates the three Stripe Prices (`docs/launch-checklist.md`). Budgets and paid bookings are merged; paid bookings and needs Stripe test keys on staging to try end to end. Next to build: document AI (needs the owner's privacy decision first), workflow automation, named approval chains and delegation.
 
 Deployed commit SHA: none (not deployed). Verified production status: none.

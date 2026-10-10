@@ -1,8 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { decideSpendRequestAction, setSpendPolicyAction, withdrawSpendRequestAction } from "@/app/(app)/approvals-actions";
-import { approvalFailureMessage, type ApprovalFailure } from "@/lib/approvals/present";
+import { decideSpendRequestAction, setSpendPolicyAction, setSpendTiersAction, withdrawSpendRequestAction } from "@/app/(app)/approvals-actions";
+import { approvalFailureMessage, decideOutcomeMessage, type ApprovalFailure } from "@/lib/approvals/present";
 
 const btn = "rounded-md border border-neutral-400 px-3 py-1 text-sm disabled:opacity-50";
 const field = "mt-1 block w-full rounded-md border border-neutral-300 bg-transparent px-3 py-2 focus-visible:outline-2 focus-visible:outline-blue-600";
@@ -20,7 +20,7 @@ function useApprovalAction() {
     try {
       const r = await fn();
       if (!r.ok) { setError(approvalFailureMessage(r.code)); return; }
-      if (r.outcome === "lapsed") setNotice("The terms changed after this request was made, so it lapsed. The admin can accept again to send a new request.");
+      setNotice(decideOutcomeMessage(r.outcome) ?? "");
       router.refresh();
     } catch {
       setError(approvalFailureMessage("error"));
@@ -83,5 +83,39 @@ export function WithdrawButton({ orgId, requestId, contractId }: { orgId: string
       <button disabled={pending} className={btn} onClick={() => { if (window.confirm("Withdraw this approval request?")) run(() => withdrawSpendRequestAction({ orgId, requestId, contractId })); }}>Withdraw</button>
       <Err error={error} />
     </div>
+  );
+}
+
+export interface TierRow { min: string; approvals: number }
+/** Owners set how many different owners must approve from each amount (at most 3, never more than there are owners). */
+export function TierForm({ orgId, currency, tiers, owners }: { orgId: string; currency: string; tiers: TierRow[]; owners: number }) {
+  const { pending, error, notice, run } = useApprovalAction();
+  const [rows, setRows] = useState<TierRow[]>(tiers);
+  const [saved, setSaved] = useState(false);
+  const set = (i: number, r: Partial<TierRow>) => { setSaved(false); setRows(rows.map((x, j) => (j === i ? { ...x, ...r } : x))); };
+  const max = Math.max(1, Math.min(3, owners));
+  return (
+    <form className="mt-3 max-w-md space-y-3" onSubmit={(e) => {
+      e.preventDefault(); setSaved(false);
+      run(async () => { const r = await setSpendTiersAction({ orgId, currency, tiers: rows }); if (r.ok) setSaved(true); return r; });
+    }}>
+      {rows.map((r, i) => (
+        <div key={i} className="flex flex-wrap items-end gap-2 text-sm">
+          <label>From ({currency})<input className={field} inputMode="decimal" required value={r.min} onChange={(e) => set(i, { min: e.target.value })} placeholder="50000.00" /></label>
+          <label>Owners needed
+            <select className={field} value={r.approvals} onChange={(e) => set(i, { approvals: Number(e.target.value) })}>
+              {[1, 2, 3].filter((n) => n <= max).map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+          <button type="button" className={btn} onClick={() => { setSaved(false); setRows(rows.filter((_, j) => j !== i)); }}>Remove</button>
+        </div>
+      ))}
+      {rows.length < 10 && <button type="button" className={btn} onClick={() => { setSaved(false); setRows([...rows, { min: "", approvals: Math.min(2, max) }]); }}>Add tier</button>}
+      <p className="text-xs text-neutral-600 dark:text-neutral-400">The highest tier a contract reaches decides how many different owners must approve it. In a tier of two or more, an owner&apos;s own accept counts as one approval.</p>
+      <button disabled={pending} className={btn}>Save tiers</button>
+      {saved && <p role="status" className="text-sm">Saved.</p>}
+      {notice && <p role="status" className="text-sm">{notice}</p>}
+      <Err error={error} />
+    </form>
   );
 }

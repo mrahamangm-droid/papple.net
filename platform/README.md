@@ -23,6 +23,9 @@ A client organization's owners can require their approval before an admin accept
 ## Budgets (procurement slice 2)
 Owners set a budget per calendar month or quarter in `/settings/approvals`. Accepted contracts count their price when the client accepts them (a contract cancelled later counts only what was paid), and paid bookings count when paid. An admin accepting a contract that would go over the budget, or one in another currency, sends it to the owners through the existing approval flow; owners can go over it with a warning. Usage is shown on `/approvals`, on a draft contract before Accept, and as a warning before paying a booking. Spec: `docs/superpowers/specs/2026-10-16-papple-budgets-design.md`. What is and is not verified: `docs/acceptance-budgets.md`.
 
+## Approval tiers (procurement slice 3)
+Owners set amount tiers in `/settings/approvals` that decide how many different owners must approve a contract (1 to 3, never more than the organization has owners). In a tier of two or more, an owner's own accept counts as the first approval and another owner must approve; each approval is recorded and one rejection ends the request. `/approvals` and the contract show progress ("1 of 2 owner approvals"). Spec: `docs/superpowers/specs/2026-10-17-papple-approval-tiers-design.md`. What is and is not verified: `docs/acceptance-approval-tiers.md`.
+
 ## Bookings (bookings slice 1)
 Clients book open times on a professional's service page (`Book a time`), shown in their own time zone. The professional sets weekly hours, a gap between calls, minimum notice and how far ahead people can book in `/settings/bookings`, picks a slot length per service, and confirms or declines requests in `/bookings`. Either side cancels with a reason; confirmed bookings download as a calendar file. The database rules out double bookings. Spec: `docs/superpowers/specs/2026-10-14-papple-bookings-design.md`. What is and is not verified: `docs/acceptance-bookings.md`.
 

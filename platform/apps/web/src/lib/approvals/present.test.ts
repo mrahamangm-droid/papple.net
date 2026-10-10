@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptOutcomeMessage, approvalFailureMessage, approvalNotificationCopy, canDecide, canWithdraw, policySummary, requestStatusLabel } from "./present";
+import { acceptOutcomeMessage, approvalFailureMessage, approvalNotificationCopy, approvalProgress, canDecide, canWithdraw, decideOutcomeMessage, policySummary, requestStatusLabel, tierSummary } from "./present";
 
 describe("requestStatusLabel", () => {
   it.each([
@@ -65,5 +65,32 @@ describe("policySummary", () => {
   it("says when there is no rule or it is switched off", () => {
     expect(policySummary(null)).toBe("No approval rule. Owners and admins accept contracts directly.");
     expect(policySummary({ enabled: false, threshold_minor: 10000, currency: "USD" })).toBe("No approval rule. Owners and admins accept contracts directly.");
+  });
+});
+
+describe("approval tiers", () => {
+  it("tells an owner their accept was only the first approval", () => {
+    expect(acceptOutcomeMessage("approval_requested", true)).toBe("Your approval is recorded. Another owner must approve before the contract is accepted.");
+    expect(acceptOutcomeMessage("approval_pending", true)).toBe("Your approval is recorded. Another owner must approve before the contract is accepted.");
+  });
+  it("words a partial decision", () => {
+    expect(decideOutcomeMessage("partial")).toBe("Your approval is recorded. Another owner must also approve.");
+    expect(decideOutcomeMessage("approved")).toBeNull();
+    expect(decideOutcomeMessage("lapsed")).toMatch(/terms changed/);
+  });
+  it("shows progress and whether it can still complete", () => {
+    expect(approvalProgress({ required: 2, approvedBy: ["Ana"], eligibleLeft: 1 })).toEqual({ text: "1 of 2 owner approvals (approved by Ana)", stuck: false });
+    expect(approvalProgress({ required: 1, approvedBy: [], eligibleLeft: 2 })).toEqual({ text: "Needs 1 owner approval", stuck: false });
+    expect(approvalProgress({ required: 3, approvedBy: ["Ana"], eligibleLeft: 1 })).toEqual({
+      text: "1 of 3 owner approvals (approved by Ana). It cannot be completed: not enough owners are left to approve.", stuck: true,
+    });
+  });
+  it("summarizes the tiers", () => {
+    expect(tierSummary([{ min_minor: 5000000, approvals: 2 }, { min_minor: 500000, approvals: 1 }], "USD"))
+      .toBe("From $5,000.00: 1 owner approval. From $50,000.00: 2 different owners.");
+    expect(tierSummary([], "USD")).toBe("One owner approval for every request.");
+  });
+  it("has copy for a progress notification", () => {
+    expect(approvalNotificationCopy("spend_request_progress", {})?.text).toBe("An owner approved your contract; another approval is still needed.");
   });
 });

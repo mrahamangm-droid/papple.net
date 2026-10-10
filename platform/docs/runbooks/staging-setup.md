@@ -21,7 +21,7 @@ Then Vercel → Deployments → the latest one → **Redeploy**, so the new vari
 
 ## 2. Database: bring staging up to date (about 10 minutes)
 
-Staging has migrations 0001-0039 loaded by hand (verified 2026-10-09). 0040 (work and files), 0041 and 0042 (spend approvals), 0043 (bookings), 0044 (paid bookings) and 0045 (budgets, once merged) are pending.
+Staging has migrations 0001-0039 loaded by hand (verified 2026-10-09). 0040 (work and files), 0041 and 0042 (spend approvals), 0043 (bookings), 0044 (paid bookings) 0045 (budgets), 0046 (plan prices) and 0047 (approval tiers, once merged) are pending.
 
 **One-time setup.** GitHub → repository Settings → Environments → **New environment** `staging`, then add three secrets:
 
@@ -33,9 +33,9 @@ Create a `production` environment the same way later, with **Required reviewers*
 
 **Run it.** GitHub → Actions → **platform-migrations** → Run workflow, environment `staging`:
 
-1. Choose mode `dry-run`, then read the "Run" step. If it lists only `0040` and later (up to `0045`), go to 3. If it lists `0001` and up, the hand-loaded history was not recorded: go to 2.
+1. Choose mode `dry-run`, then read the "Run" step. If it lists only `0040` and later (up to `0047`), go to 3. If it lists `0001` and up, the hand-loaded history was not recorded: go to 2.
 2. Run again with mode `mark-applied` and `through` set to `0039`. This only records that 0001-0039 are already there (it changes no tables). Its output must now list only 0040 and later.
-3. Run again with mode `apply`. It applies 0040 onwards (through 0045) and prints each one.
+3. Run again with mode `apply`. It applies 0040 onwards (through 0047) and prints each one.
 
 If `apply` fails, nothing after the failing migration runs. Copy the error from the log and stop; do not retry blindly.
 

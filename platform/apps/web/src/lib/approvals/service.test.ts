@@ -81,3 +81,40 @@ describe("withdraw", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 });
+
+describe("setTiers", () => {
+  const tiers = (rows: { min: string; approvals: number }[], currency = "USD") => ({ orgId: ORG, currency, tiers: rows });
+  it("turns major units into minor units and sends the whole set", async () => {
+    const { svc, rpc, revalidate } = mk();
+    expect(await svc.setTiers(tiers([{ min: "5000", approvals: 1 }, { min: "50000.50", approvals: 2 }]))).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledWith("spend_tiers_set", { p_org: ORG, p_tiers: [{ min: 500000, approvals: 1 }, { min: 5000050, approvals: 2 }] });
+    expect(revalidate).toHaveBeenCalledWith("/settings/approvals");
+  });
+  it("allows clearing all tiers", async () => {
+    const { svc, rpc } = mk();
+    expect(await svc.setTiers(tiers([]))).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledWith("spend_tiers_set", { p_org: ORG, p_tiers: [] });
+  });
+  it.each([
+    ["extra decimals", [{ min: "10.555", approvals: 1 }]],
+    ["four approvals", [{ min: "10", approvals: 4 }]],
+    ["zero approvals", [{ min: "10", approvals: 0 }]],
+    ["the same amount twice", [{ min: "10", approvals: 1 }, { min: "10.00", approvals: 2 }]],
+    ["a sign", [{ min: "-10", approvals: 1 }]],
+    ["eleven tiers", Array.from({ length: 11 }, (_, i) => ({ min: String(i + 1), approvals: 1 }))],
+  ])("refuses %s before any call", async (_n, rows) => {
+    const { svc, rpc } = mk();
+    expect(await svc.setTiers(tiers(rows))).toEqual({ ok: false, code: "invalid" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("maps the database refusing more approvals than owners", async () => {
+    expect(await mk(async () => ({ data: null, error: { code: "22023" } })).svc.setTiers(tiers([{ min: "1", approvals: 3 }]))).toEqual({ ok: false, code: "invalid" });
+  });
+});
+
+describe("partial approval", () => {
+  it("returns the partial outcome", async () => {
+    const { svc } = mk(async () => ({ data: "partial", error: null }));
+    expect(await svc.decide({ orgId: ORG, requestId: REQ, contractId: CON, approve: true, note: "" })).toEqual({ ok: true, outcome: "partial" });
+  });
+});

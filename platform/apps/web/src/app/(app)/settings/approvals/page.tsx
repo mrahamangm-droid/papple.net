@@ -1,8 +1,8 @@
 import { AppShell } from "@/components/shell/AppShell";
-import { PolicyForm } from "@/components/approvals/ApprovalForms";
+import { PolicyForm, TierForm } from "@/components/approvals/ApprovalForms";
 import { pickOrg } from "@/lib/approvals/org";
 import { OrgSwitcher } from "@/components/approvals/OrgSwitcher";
-import { isManager, policySummary, type SpendPolicy } from "@/lib/approvals/present";
+import { isManager, policySummary, tierSummary, type SpendPolicy, type SpendTier } from "@/lib/approvals/present";
 import { requireCapability } from "@/lib/auth-context";
 import { BudgetForm } from "@/components/budgets/BudgetForm";
 import { BudgetMeter } from "@/components/budgets/BudgetMeter";
@@ -25,6 +25,14 @@ export default async function ApprovalSettingsPage({ searchParams }: PageProps<"
     ? await db.from("spend_policies").select("enabled, threshold_minor, currency").eq("org_id", membership.orgId).maybeSingle()
     : { data: null };
   const p = policy as SpendPolicy | null;
+  const [{ data: tierRows }, { data: team }] = manager
+    ? await Promise.all([
+        db.from("spend_tiers").select("min_minor, approvals").eq("org_id", membership.orgId).order("min_minor"),
+        db.rpc("team_members", { p_org: membership.orgId }),
+      ])
+    : [{ data: null }, { data: null }];
+  const tiers = (tierRows ?? []) as SpendTier[];
+  const owners = ((team ?? []) as { role: string }[]).filter((m) => m.role === "owner").length;
   const [{ data: budget }, status] = manager
     ? await Promise.all([
         db.from("budgets").select("enabled, period, amount_minor, currency").eq("org_id", membership.orgId).maybeSingle(),
@@ -47,6 +55,16 @@ export default async function ApprovalSettingsPage({ searchParams }: PageProps<"
               amount={p ? String(fromMinor(p.threshold_minor, p.currency)) : ""} currency={p?.currency ?? "USD"} />
           ) : (
             <p className="mt-4 text-sm">Only owners can change this rule.</p>
+          )}
+          {p?.enabled && (
+            <>
+              <h2 className="mt-10 text-lg font-medium">How many owners must approve</h2>
+              <p className="mt-2 max-w-2xl text-sm">{tierSummary(tiers, p.currency)}</p>
+              {membership.role === "owner"
+                ? <TierForm orgId={membership.orgId} currency={p.currency} owners={owners}
+                    tiers={tiers.map((t) => ({ min: String(fromMinor(t.min_minor, p.currency)), approvals: t.approvals }))} />
+                : <p className="mt-2 text-sm">Only owners can change the tiers.</p>}
+            </>
           )}
           <h2 className="mt-10 text-lg font-medium">Budget</h2>
           <p className="mt-2 max-w-2xl text-sm">{budgetSummary(b)}</p>
