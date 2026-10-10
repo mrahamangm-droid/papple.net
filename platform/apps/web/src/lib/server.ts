@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { createAdminAction } from "./admin-action";
 import { createAuditWriter } from "./audit";
-import { parseServerEnv } from "./env";
+import { parseRateLimitEnv, parseServerEnv } from "./env";
 import { headers } from "next/headers";
 import { RULES, RateLimitError, createRateLimiter, enforce, type Rule } from "./ratelimit";
 import { createOnboarding, type OnboardingInput } from "./onboarding";
@@ -123,7 +123,7 @@ export async function clientIp(): Promise<string> {
 
 /** Returns true if the call may proceed; false if rate limited. */
 export async function throttle(rule: keyof typeof RULES, key: string): Promise<boolean> {
-  limiter ??= createRateLimiter(parseServerEnv(process.env));
+  limiter ??= createRateLimiter(parseRateLimitEnv(process.env));
   try {
     await enforce(limiter, `${rule}:${key}`, RULES[rule] satisfies Rule);
     return true;

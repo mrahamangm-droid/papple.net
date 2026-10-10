@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePublicEnv, parseServerEnv } from "./env";
+import { parsePublicEnv, parseRateLimitEnv, parseServerEnv } from "./env";
 
 const valid = {
   NEXT_PUBLIC_SUPABASE_URL: "https://abc.supabase.co",
@@ -60,5 +60,16 @@ describe("parsePublicEnv", () => {
   it("only exposes public keys", () => {
     const env = parsePublicEnv(valid);
     expect(Object.keys(env).every((k) => k.startsWith("NEXT_PUBLIC_"))).toBe(true);
+  });
+});
+
+describe("parseRateLimitEnv", () => {
+  it("needs nothing: search throttling must not depend on storage or other unset config", () => {
+    expect(parseRateLimitEnv({})).toEqual({});
+  });
+  it("passes the Upstash pair through and rejects a malformed url without echoing the token", () => {
+    const ok = parseRateLimitEnv({ UPSTASH_REDIS_REST_URL: "https://x.upstash.io", UPSTASH_REDIS_REST_TOKEN: "tok" });
+    expect(ok.UPSTASH_REDIS_REST_TOKEN).toBe("tok");
+    expect(() => parseRateLimitEnv({ UPSTASH_REDIS_REST_URL: "nope", UPSTASH_REDIS_REST_TOKEN: "tok-secret" })).toThrow(/UPSTASH_REDIS_REST_URL/);
   });
 });
