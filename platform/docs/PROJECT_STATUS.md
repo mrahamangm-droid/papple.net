@@ -1,10 +1,10 @@
 # PAPple project status
 
-Updated 2026-10-09. For the evidence behind each line see `PROJECT_AUDIT.md`; for test numbers see `TEST_REPORT.md`.
+Updated 2026-10-10. CI now runs this app's lint, typecheck, unit tests and build on every push (`platform` job). For the evidence behind each line see `PROJECT_AUDIT.md`; for test numbers see `TEST_REPORT.md`.
 
 ## Where we are
 
-Built and locally tested: identity and tenancy, marketplace, contracts and payments, disputes and reviews, admin console and moderation, AI copilot, billing, invoicing, CRM, team, credentials, talent pools, analytics, read-only API, contract tasks, time and files (new, on a branch until reviewed), legal pages and SEO.
+Built and locally tested: identity and tenancy, marketplace, contracts and payments, disputes and reviews, admin console and moderation, AI copilot, billing, invoicing, CRM, team, credentials, talent pools, analytics, read-only API, contract tasks, time and files, legal pages and SEO.
 
 Not live: no deployed site exists. GitHub `main` is complete; the staging database is loaded; the Vercel staging project exists but has no deployment, most likely because the owning Vercel team has a failed-payment notice (owner action).
 
@@ -28,6 +28,6 @@ The master prompt asks for eight documents. Names are adapted to the repository'
 1. Owner: resolve the Vercel payment notice; add the Supabase keys and `NEXT_PUBLIC_SITE_URL` in Vercel; deploy.
 2. Run the staging run-through (shared doc) with two test accounts: credentials, talent pools, analytics, API keys.
 3. Owner items in `docs/launch-checklist.md` (legal review, Stripe, Resend, security contact).
-4. Built next (awaiting merge): contract tasks, time records and shared files (`/contracts/[id]/work`). Then document AI, workflow automation, bookings, enterprise procurement.
+4. Contract tasks, time records and shared files (`/contracts/[id]/work`) are merged (#42). Next to build: document AI, workflow automation, bookings, enterprise procurement.
 
 Deployed commit SHA: none (not deployed). Verified production status: none.
