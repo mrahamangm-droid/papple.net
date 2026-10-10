@@ -62,23 +62,32 @@ create policy booking_refunds_select on public.booking_refunds for select to aut
   using (exists (select 1 from booking_payments p join bookings b on b.id = p.booking_id
                  where p.id = booking_payment_id and (public.is_member(b.provider_org_id) or public.is_member(b.client_org_id))));
 
--- A confirmed paid booking whose payment window passed without a payment.
+-- A confirmed paid booking whose payment window passed without a payment. While a checkout session is open the time is held
+-- one hour longer: the client may have paid before the deadline and Stripe's webhook can arrive late.
 create function public.booking_is_lapsed(p_booking uuid) returns boolean
 language sql stable security definer set search_path = public as
-$$ select exists (select 1 from bookings b where b.id = p_booking and b.status = 'confirmed' and b.price is not null and b.pay_by <= now()
+$$ select exists (select 1 from bookings b where b.id = p_booking and b.status = 'confirmed' and b.price is not null
+                  and b.pay_by <= now() - case when exists (select 1 from booking_payments p where p.booking_id = b.id and p.status = 'pending' and p.checkout_session_id is not null)
+                                               then interval '1 hour' else interval '0' end
                   and not exists (select 1 from booking_payments p where p.booking_id = b.id and p.status in ('succeeded','refund_pending','refunded'))) $$;
 
 -- Releases lapsed bookings involving an organization (lazy: there is no scheduler). Frees the slot for the exclusion constraint.
 create function public.booking_release_lapsed(p_org uuid) returns void
 language plpgsql security definer set search_path = public as
-$$ declare r record;
+-- Candidates are locked first and re-checked in a new statement (new snapshot), so a payment the webhook committed while we
+-- waited for the row lock is seen and the booking is kept.
+$$ declare r record; v_client uuid;
 begin
-  for r in update bookings b set status = 'cancelled', reason = 'Payment was not received in time', decided_at = now()
+  for r in select b.id from bookings b
            where p_org in (b.provider_org_id, b.client_org_id) and b.status = 'confirmed' and b.price is not null and b.pay_by <= now()
-             and not exists (select 1 from booking_payments p where p.booking_id = b.id and p.status in ('succeeded','refund_pending','refunded'))
-           returning b.id, b.client_org_id loop
-    insert into audit_log (org_id, action, entity, entity_id, after, outcome, request_id)
-    values (r.client_org_id, 'booking.released', 'booking', r.id::text, '{}'::jsonb, 'success', gen_random_uuid()::text);
+           order by b.id for update loop
+    update bookings b set status = 'cancelled', reason = 'Payment was not received in time', decided_at = now()
+      where b.id = r.id and public.booking_is_lapsed(r.id)
+      returning b.client_org_id into v_client;
+    if found then
+      insert into audit_log (org_id, action, entity, entity_id, after, outcome, request_id)
+      values (v_client, 'booking.released', 'booking', r.id::text, '{}'::jsonb, 'success', gen_random_uuid()::text);
+    end if;
   end loop;
 end $$;
 
@@ -101,6 +110,9 @@ language plpgsql security definer set search_path = public as
 $$ begin
   if auth.uid() is null or not public.has_org_role(p_org, array['owner','admin']) then raise exception 'not allowed' using errcode = '42501'; end if;
   if p_price is not null and p_price not between 1 and 10000000 then raise exception 'invalid price' using errcode = '22023'; end if;
+  -- as contracts' smallest milestone: the professional must receive something after Papple's minimum fee
+  if p_price is not null and p_price <= public.setting_int('payments.min_application_fee_minor', 0) then
+    raise exception 'price must be above the minimum fee' using errcode = '22023'; end if;
   if p_price is not null and not exists (select 1 from connected_accounts where org_id = p_org and payouts_enabled) then
     raise exception 'finish payout setup first' using errcode = '22023'; end if;
   update services set booking_price = p_price where id = p_service and org_id = p_org;
@@ -204,7 +216,8 @@ begin
     if not exists (select 1 from connected_accounts where org_id = p_org and payouts_enabled) then
       raise exception 'finish payout setup first' using errcode = '22023'; end if;
     v_pay_by := least(now() + make_interval(hours => public.setting_int('bookings.payment_window_hours', 24)), v_b.starts_at - interval '1 hour');
-    if v_pay_by <= now() then raise exception 'too close to the start to be paid' using errcode = '22023'; end if;
+    -- Stripe sessions last at least 30 minutes; a shorter window would let a payment land after the deadline
+    if v_pay_by < now() + interval '30 minutes' then raise exception 'too close to the start to be paid' using errcode = '22023'; end if;
   end if;
   update bookings set status = case when p_confirm then 'confirmed' else 'declined' end,
     meeting_url = case when p_confirm then v_url else null end, reason = case when p_confirm then '' else v_reason end,
@@ -228,10 +241,9 @@ begin
   select * into v_b from bookings where id = p_booking for update;
   if not found or v_b.client_org_id <> p_org then raise exception 'not allowed' using errcode = '42501'; end if;
   if v_b.price is null then raise exception 'this booking is free' using errcode = '22023'; end if;
-  if public.booking_is_lapsed(p_booking) then
-    perform public.booking_release_lapsed(p_org);
-    raise exception 'the payment window has passed' using errcode = '55000'; end if;
-  if v_b.status <> 'confirmed' or v_b.pay_by is null or v_b.pay_by <= now() then raise exception 'booking cannot be paid' using errcode = '55000'; end if;
+  if v_b.status <> 'confirmed' or v_b.pay_by is null or v_b.pay_by < now() + interval '30 minutes' then
+    raise exception 'booking cannot be paid now' using errcode = '55000'; end if;
+  if v_b.price <= v_min then raise exception 'price is not above the minimum fee' using errcode = '22023'; end if;
   select * into v_p from booking_payments where booking_id = p_booking for update;
   if found and v_p.status in ('succeeded','refund_pending','refunded') then raise exception 'booking is already paid' using errcode = '55000'; end if;
   v_prev := v_p.checkout_session_id;
@@ -267,8 +279,9 @@ end $$;
 create function public.booking_attach_checkout(p_payment uuid, p_session text, p_prev text) returns boolean
 language plpgsql security definer set search_path = public as
 $$ begin
-  update booking_payments set checkout_session_id = p_session, status = 'pending'
-    where id = p_payment and status in ('pending','failed') and checkout_session_id is not distinct from p_prev;
+  update booking_payments p set checkout_session_id = p_session, status = 'pending'
+    where p.id = p_payment and p.status in ('pending','failed') and p.checkout_session_id is not distinct from p_prev
+      and exists (select 1 from bookings b where b.id = p.booking_id and b.status = 'confirmed' and b.pay_by > now());
   return found;
 end $$;
 
@@ -288,7 +301,9 @@ begin
     return 'duplicate_charge';
   end if;
   if p_amount is distinct from v_p.client_total or p_currency is distinct from v_p.currency then return 'mismatch'; end if;
-  v_lapsed := v_b.status <> 'confirmed' or v_b.pay_by is null or v_b.pay_by <= now();
+  -- A booking still confirmed was paid in time: sessions are created only 30+ minutes before pay_by and never outlive it, and
+  -- release waits for the row lock held here. Only a cancelled or released booking gives the money back.
+  v_lapsed := v_b.status <> 'confirmed';
   update booking_payments set status = 'succeeded', payment_intent_id = p_intent, paid_at = now(),
     checkout_session_id = coalesce(p_session, checkout_session_id) where id = p_payment;
   insert into audit_log (org_id, action, entity, entity_id, after, outcome, request_id)
@@ -362,6 +377,14 @@ begin
   return case when v_refund then 'refund_pending' else 'cancelled' end;
 end $$;
 
+create function public.booking_open_session(p_booking uuid) returns text
+language sql stable security definer set search_path = public as
+$$ select checkout_session_id from booking_payments where booking_id = p_booking and status = 'pending' and checkout_session_id is not null $$;
+
+create function public.booking_of_payment(p_payment uuid) returns uuid
+language sql stable security definer set search_path = public as
+$$ select booking_id from booking_payments where id = p_payment $$;
+
 create function public.booking_refund_to_send(p_booking uuid) returns table (payment_id uuid, payment_intent_id text, amount int, currency text, idempotency_key text)
 language sql stable security definer set search_path = public as
 $$ select p.id, p.payment_intent_id, r.amount, r.currency, r.idempotency_key
@@ -387,7 +410,7 @@ drop function public.booking_list(uuid);
 create function public.booking_list(p_org uuid) returns table (
   id uuid, side text, service_title text, other_org_name text, starts_at timestamptz, ends_at timestamptz,
   status text, note text, meeting_url text, reason text, cancelled_by_org uuid, created_at timestamptz,
-  price int, currency text, pay_by timestamptz, payment_status text, refund_status text)
+  price int, currency text, client_total int, pay_by timestamptz, payment_status text, refund_status text)
 language plpgsql security definer set search_path = public as
 $$ begin
   if auth.uid() is null or not public.is_member(p_org) then raise exception 'not allowed' using errcode = '42501'; end if;
@@ -395,7 +418,9 @@ $$ begin
   return query
     select b.id, case when b.provider_org_id = p_org then 'provider' else 'client' end, coalesce(s.title, 'Service'),
            o.name, b.starts_at, b.ends_at, b.status, b.note, b.meeting_url, b.reason, b.cancelled_by_org, b.created_at,
-           b.price, b.currency, b.pay_by, p.status, r.status
+           b.price, b.currency,
+           coalesce(p.client_total, case when b.price is not null then b.price + ((b.price::bigint * b.commission_client_bps + 5000) / 10000)::int end),
+           b.pay_by, p.status, r.status
     from bookings b
     left join services s on s.id = b.service_id
     join organizations o on o.id = case when b.provider_org_id = p_org then b.client_org_id else b.provider_org_id end
@@ -485,10 +510,11 @@ end $$;
 revoke execute on function public.booking_is_lapsed(uuid), public.booking_release_lapsed(uuid), public.booking_queue_refund(uuid),
   public.booking_payment_succeeded(uuid, text, text, int, text), public.booking_payment_failed(uuid, text),
   public.booking_refund_succeeded(uuid, text, int, text), public.booking_payment_destination(uuid),
-  public.booking_attach_checkout(uuid, text, text), public.booking_refund_to_send(uuid), public.booking_record_refund_failed(uuid, text)
+  public.booking_attach_checkout(uuid, text, text), public.booking_refund_to_send(uuid), public.booking_record_refund_failed(uuid, text),
+  public.booking_open_session(uuid), public.booking_of_payment(uuid)
   from public, anon, authenticated;
 grant execute on function public.booking_payment_destination(uuid), public.booking_attach_checkout(uuid, text, text),
-  public.booking_refund_to_send(uuid), public.booking_record_refund_failed(uuid, text) to service_role;
+  public.booking_refund_to_send(uuid), public.booking_record_refund_failed(uuid, text), public.booking_open_session(uuid), public.booking_of_payment(uuid) to service_role;
 revoke execute on function public.service_set_booking_price(uuid, uuid, int), public.booking_pay(uuid, uuid), public.booking_cancel(uuid, uuid, text),
   public.booking_list(uuid), public.booking_price_offer(uuid), public.booking_refund_pending(uuid, uuid) from public, anon;
 grant execute on function public.service_set_booking_price(uuid, uuid, int), public.booking_pay(uuid, uuid), public.booking_cancel(uuid, uuid, text),

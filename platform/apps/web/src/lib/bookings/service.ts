@@ -5,7 +5,7 @@ import type { BookingFailure } from "./present";
 export type { BookingFailure };
 type Fail = { ok: false; code: BookingFailure };
 export type DoneResult = { ok: true } | Fail;
-export type CancelResult = { ok: true; refund: boolean } | Fail;
+export type CancelResult = { ok: true; refund: boolean; bookingId: string } | Fail;
 
 export interface BookingsDeps {
   getUserId: () => Promise<string | null>;
@@ -115,7 +115,7 @@ export function createBookingsService(deps: BookingsDeps) {
       const r = await run("booking_cancel", { p_org: p.data.orgId, p_booking: p.data.bookingId, p_reason: p.data.reason.trim() });
       if (!r.ok) return r;
       deps.revalidate("/bookings");
-      return { ok: true, refund: r.data === "refund_pending" };
+      return { ok: true, refund: r.data === "refund_pending", bookingId: p.data.bookingId };
     },
   };
 }

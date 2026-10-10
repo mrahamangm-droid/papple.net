@@ -35,6 +35,8 @@ export function createPaymentsServiceDb(rpc: ServiceRpc) {
       const r = rows?.[0];
       return r ? { paymentId: r.payment_id, paymentIntentId: r.payment_intent_id, amount: r.amount, currency: r.currency, idempotencyKey: r.idempotency_key } : null;
     },
+    bookingOpenSession: (bookingId: string) => call<string | null>("booking_open_session", { p_booking: bookingId }),
+    bookingOfPayment: (paymentId: string) => call<string | null>("booking_of_payment", { p_payment: paymentId }),
     bookingRecordRefundFailed: (paymentId: string, reason: string) => call<void>("booking_record_refund_failed", { p_payment: paymentId, p_reason: reason }),
     recordAccountUpdate: (account: string, payoutsEnabled: boolean, detailsSubmitted: boolean) =>
       call<boolean>("record_account_update", { p_account: account, p_payouts: payoutsEnabled, p_details: detailsSubmitted }),

@@ -5,7 +5,7 @@ import type { PaymentProvider, ProviderEvent } from "./provider";
 
 const PAID: ProviderEvent = { kind: "payment_succeeded", id: "evt_1", paymentId: "p1", sessionId: "cs_1", intentId: "pi_1", amountTotal: 40800, currency: "USD" };
 
-function setup(event: ProviderEvent | Error, dbResult: string = "recorded") {
+function setup(event: ProviderEvent | Error, dbResult: string = "recorded", onPaidOnCancelled?: (paymentId: string) => Promise<unknown>) {
   const provider = { parseWebhook: vi.fn(() => { if (event instanceof Error) throw event; return event; }) } as unknown as PaymentProvider;
   const db = {
     recordPaymentSucceeded: vi.fn(async () => dbResult),
@@ -15,11 +15,22 @@ function setup(event: ProviderEvent | Error, dbResult: string = "recorded") {
     recordSubscription: vi.fn(async () => dbResult),
   };
   const alert = vi.fn();
-  const handler = createWebhookHandler({ provider, store: createMemoryWebhookStore(), db, alert });
+  const handler = createWebhookHandler({ provider, store: createMemoryWebhookStore(), db, alert, onPaidOnCancelled });
   return { handler, db, alert, provider };
 }
 
 describe("webhook handler", () => {
+  it("hands a payment that arrived after cancellation to the refund hook, and a failing hook still answers 200", async () => {
+    const hook = vi.fn(async () => { throw new Error("stripe down"); });
+    const { handler } = setup(PAID, "paid_on_cancelled", hook);
+    expect((await handler("{}", "sig")).status).toBe(200);
+    expect(hook).toHaveBeenCalledWith("p1");
+  });
+  it("does not call the refund hook for other outcomes", async () => {
+    const hook = vi.fn(async () => undefined);
+    await setup(PAID, "recorded", hook).handler("{}", "sig");
+    expect(hook).not.toHaveBeenCalled();
+  });
   it("rejects a missing signature without touching anything", async () => {
     const { handler, db, provider } = setup(PAID);
     expect((await handler("{}", null)).status).toBe(400);

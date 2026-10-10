@@ -17,6 +17,8 @@ export interface BookingPaymentsDeps {
     attach: (paymentId: string, sessionId: string, previous: string | null) => Promise<boolean>;
     refundToSend: (bookingId: string) => Promise<QueuedRefund | null>;
     recordRefundFailed: (paymentId: string, reason: string) => Promise<void>;
+    openSession: (bookingId: string) => Promise<string | null>;
+    bookingOfPayment: (paymentId: string) => Promise<string | null>;
   };
   provider: Pick<PaymentProvider, "createCheckout" | "expireCheckout" | "refundPayment">;
   appUrl: () => string;
@@ -111,6 +113,24 @@ export function createBookingPayments(deps: BookingPaymentsDeps) {
     },
 
     sendRefund,
+
+    /** After a cancellation the database allowed: close any checkout still open, then send the refund it queued. */
+    async afterCancel(bookingId: string, refund: boolean): Promise<{ ok: boolean }> {
+      try {
+        const open = await deps.service.openSession(bookingId);
+        // "complete" means the client paid meanwhile: the webhook records it on the cancelled booking and refunds it
+        if (open) await deps.provider.expireCheckout(open);
+      } catch {
+        // best effort: the database refuses to attach new sessions to a cancelled booking either way
+      }
+      return refund ? sendRefund(bookingId) : { ok: true };
+    },
+
+    /** Webhook hook: money that arrived after a booking was cancelled is given back straight away. Contract payments are ignored. */
+    async refundLatePayment(paymentId: string): Promise<{ ok: boolean }> {
+      const bookingId = await deps.service.bookingOfPayment(paymentId).catch(() => null);
+      return bookingId ? sendRefund(bookingId) : { ok: true };
+    },
 
     /** The "Retry refund" button: the database confirms the caller belongs to the booking before anything is sent. */
     async retryRefund(raw: unknown): Promise<{ ok: true } | Fail> {

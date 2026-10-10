@@ -268,6 +268,7 @@ export async function handleStripeWebhook(rawBody: string, signature: string | n
       console.error(message, context);
       Sentry.captureMessage(message, { level: "error", extra: context });
     },
+    onPaidOnCancelled: (paymentId) => bookingPayments(() => undefined).refundLatePayment(paymentId),
   })(rawBody, signature);
 }
 
@@ -464,6 +465,8 @@ export const bookingPayments = (revalidate: (path: string) => void) => createBoo
     attach: (id, session, prev) => paymentsServiceDb().bookingAttachCheckout(id, session, prev),
     refundToSend: (bookingId) => paymentsServiceDb().bookingRefundToSend(bookingId),
     recordRefundFailed: (id, reason) => paymentsServiceDb().bookingRecordRefundFailed(id, reason),
+    openSession: (bookingId) => paymentsServiceDb().bookingOpenSession(bookingId),
+    bookingOfPayment: (id) => paymentsServiceDb().bookingOfPayment(id),
   },
   provider: {
     createCheckout: (i) => paymentProvider().createCheckout(i),

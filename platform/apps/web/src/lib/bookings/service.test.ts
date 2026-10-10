@@ -62,8 +62,8 @@ describe("calls", () => {
 
 describe("paid bookings", () => {
   it("reports whether a cancellation queued a refund", async () => {
-    expect(await mk(async () => ({ data: "refund_pending", error: null })).svc.cancel({ orgId: ORG, bookingId: BK, reason: "x" })).toEqual({ ok: true, refund: true });
-    expect(await mk(async () => ({ data: "cancelled", error: null })).svc.cancel({ orgId: ORG, bookingId: BK, reason: "x" })).toEqual({ ok: true, refund: false });
+    expect(await mk(async () => ({ data: "refund_pending", error: null })).svc.cancel({ orgId: ORG, bookingId: BK, reason: "x" })).toEqual({ ok: true, refund: true, bookingId: BK });
+    expect(await mk(async () => ({ data: "cancelled", error: null })).svc.cancel({ orgId: ORG, bookingId: BK, reason: "x" })).toEqual({ ok: true, refund: false, bookingId: BK });
   });
   it("turns the typed price into minor units, empty meaning free", async () => {
     const { svc, rpc } = mk();

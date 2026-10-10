@@ -1,5 +1,5 @@
 begin;
-select plan(64);
+select plan(75);
 
 insert into auth.users (id, email) values
  ('aaaaaa44-0000-0000-0000-0000000000a1','p@x.test'),('aaaaaa44-0000-0000-0000-0000000000a2','pm@x.test'),('aaaaaa44-0000-0000-0000-0000000000a3','c@x.test'),('aaaaaa44-0000-0000-0000-0000000000a4','cm@x.test'),('aaaaaa44-0000-0000-0000-0000000000a5','cv@x.test'),('aaaaaa44-0000-0000-0000-0000000000a6','d@x.test'),('aaaaaa44-0000-0000-0000-0000000000a7','e@x.test');
@@ -27,7 +27,10 @@ select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a1'
 select throws_ok($$select service_set_booking_price('cccccc44-0000-0000-0000-0000000000b1','dddddd44-0000-0000-0000-000000000001',0)$$, '22023', null, 'a price of zero is refused');
 reset role; update connected_accounts set payouts_enabled = false where org_id = 'cccccc44-0000-0000-0000-0000000000b1'; set local role authenticated;
 select throws_ok($$select service_set_booking_price('cccccc44-0000-0000-0000-0000000000b1','dddddd44-0000-0000-0000-000000000001',10000)$$, '22023', null, 'charging needs finished payout setup');
-reset role; update connected_accounts set payouts_enabled = true where org_id = 'cccccc44-0000-0000-0000-0000000000b1'; set local role authenticated;
+reset role; update connected_accounts set payouts_enabled = true where org_id = 'cccccc44-0000-0000-0000-0000000000b1';
+update platform_settings set value = '10000' where key = 'payments.min_application_fee_minor'; set local role authenticated;
+select throws_ok($$select service_set_booking_price('cccccc44-0000-0000-0000-0000000000b1','dddddd44-0000-0000-0000-000000000001',10000)$$, '22023', null, 'a price must be above the minimum Papple fee');
+reset role; update platform_settings set value = '0' where key = 'payments.min_application_fee_minor'; set local role authenticated;
 select lives_ok($$select service_set_booking_price('cccccc44-0000-0000-0000-0000000000b1','dddddd44-0000-0000-0000-000000000001',10000)$$, 'the owner sets a price of 100.00');
 reset role; set local role anon;
 select is(booking_price_offer('dddddd44-0000-0000-0000-000000000001'), '{"price": 10000, "currency": "USD", "refund_cutoff_hours": 24}'::jsonb, 'anyone can see the price of a listed service');
@@ -135,6 +138,20 @@ reset role;
 select is((select count(*)::int from booking_refunds r join booking_payments p on p.id = r.booking_payment_id where p.booking_id = current_setting('t.late')::uuid), 0, 'no refund row for the late cancellation');
 set local role authenticated;
 
+-- 7b. Stripe sessions last at least 30 minutes, so confirming and paying need that much time left
+reset role;
+select set_config('t.near', pg_temp.paid_booking(now() + interval '5 days', 'cccccc44-0000-0000-0000-0000000000c1')::text, false);
+delete from booking_payments where booking_id = current_setting('t.near')::uuid;
+update bookings set pay_by = now() + interval '20 minutes' where id = current_setting('t.near')::uuid;
+insert into bookings (provider_org_id, client_org_id, service_id, starts_at, ends_at, blocked, status, price, currency, commission_pro_bps, commission_client_bps)
+values ('cccccc44-0000-0000-0000-0000000000b1','cccccc44-0000-0000-0000-0000000000c1','dddddd44-0000-0000-0000-000000000001', now() + interval '80 minutes', now() + interval '140 minutes',
+        tstzrange(now() + interval '80 minutes', now() + interval '81 minutes'), 'pending', 10000, 'USD', 500, 200) returning id \gset soon_
+set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a4',true);
+select throws_ok($$select booking_pay('cccccc44-0000-0000-0000-0000000000c1', current_setting('t.near')::uuid)$$, '55000', null, 'less than 30 minutes before the payment deadline is too late to start paying');
+select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a1',true);
+select throws_ok(format($$select booking_decide('cccccc44-0000-0000-0000-0000000000b1', %L, true, '', '')$$, :'soon_id'), '22023', null, 'a paid booking that would leave under 30 minutes to pay cannot be confirmed');
+
 -- 8. an unpaid booking cancels without money
 select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a6',true);
 select lives_ok($$select set_config('t.b2', booking_request('cccccc44-0000-0000-0000-0000000000d1','dddddd44-0000-0000-0000-000000000001', pg_temp.at('12:00'), '')::text, false)$$, 'another request');
@@ -158,16 +175,31 @@ select lives_ok($$select booking_request('cccccc44-0000-0000-0000-0000000000e1',
 reset role;
 select is((select status || ' / ' || reason from bookings where id = current_setting('t.b3')::uuid), 'cancelled / Payment was not received in time', 'the unpaid booking was released');
 
--- 10. money arriving after release is refunded automatically
+-- 9b. an open checkout holds the time for an hour after the deadline, and a late webhook for a booking still confirmed counts
+select set_config('t.b5', pg_temp.paid_booking(now() + interval '4 days', 'cccccc44-0000-0000-0000-0000000000c1')::text, false);
+update booking_payments set status = 'pending', payment_intent_id = null, paid_at = null where booking_id = current_setting('t.b5')::uuid;
+update bookings set pay_by = now() - interval '10 minutes' where id = current_setting('t.b5')::uuid;
+select ok(not booking_is_lapsed(current_setting('t.b5')::uuid), 'a booking with an open checkout is not lapsed within the grace hour');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a3',true);
+select is((select status from booking_list('cccccc44-0000-0000-0000-0000000000c1') where id = current_setting('t.b5')::uuid), 'confirmed', 'listing does not release it');
+reset role; set local role service_role;
+select is(record_payment_succeeded((select id from booking_payments where booking_id = current_setting('t.b5')::uuid), 'cs_' || current_setting('t.b5'), 'pi_b5', 10200, 'USD'), 'recorded', 'a webhook arriving after the deadline for a booking still held is recorded as paid');
+reset role;
+
+-- 10. money arriving after the booking was cancelled is refunded automatically
 select set_config('t.b4', pg_temp.paid_booking(now() + interval '3 days', 'cccccc44-0000-0000-0000-0000000000c1')::text, false);
 update booking_payments set status = 'pending', payment_intent_id = null, paid_at = null where booking_id = current_setting('t.b4')::uuid;
-update bookings set pay_by = now() - interval '1 minute' where id = current_setting('t.b4')::uuid;
+update bookings set status = 'cancelled', reason = 'Plans changed' where id = current_setting('t.b4')::uuid;
 select set_config('t.p4', (select id::text from booking_payments where booking_id = current_setting('t.b4')::uuid), false);
 set local role service_role;
+select is(booking_attach_checkout(current_setting('t.p4')::uuid, 'cs_new', 'cs_' || current_setting('t.b4')), false, 'no new checkout attaches to a cancelled booking');
+select is(booking_open_session(current_setting('t.b4')::uuid), 'cs_' || current_setting('t.b4'), 'the server finds the open session to expire');
+select is(booking_of_payment(current_setting('t.p4')::uuid), current_setting('t.b4')::uuid, 'and maps a payment back to its booking');
 select is(record_payment_succeeded(current_setting('t.p4')::uuid, 'cs_' || current_setting('t.b4'), 'pi_late', 10200, 'USD'), 'paid_on_cancelled', 'a payment after release is flagged');
 reset role;
 select is((select b.status || ' / ' || p.status || ' / ' || r.status from bookings b join booking_payments p on p.booking_id = b.id join booking_refunds r on r.booking_payment_id = p.id where b.id = current_setting('t.b4')::uuid),
-  'cancelled / refund_pending / pending', 'it is recorded, the booking cancelled and a full refund queued');
+  'cancelled / refund_pending / pending', 'it is recorded, the booking stays cancelled and a full refund is queued');
 
 -- 11. privacy and direct writes
 set local role authenticated;
@@ -183,7 +215,7 @@ select throws_ok($$select booking_attach_checkout(current_setting('t.p1')::uuid,
 
 -- 12. booking_list carries the payment state
 select set_config('request.jwt.claim.sub','aaaaaa44-0000-0000-0000-0000000000a3',true);
-select is((select price || ' / ' || payment_status || ' / ' || refund_status from booking_list('cccccc44-0000-0000-0000-0000000000c1') where id = current_setting('t.b1')::uuid), '10000 / refunded / succeeded', 'the list shows price, payment and refund state');
+select is((select price || ' / ' || client_total || ' / ' || payment_status || ' / ' || refund_status from booking_list('cccccc44-0000-0000-0000-0000000000c1') where id = current_setting('t.b1')::uuid), '10000 / 10200 / refunded / succeeded', 'the list shows price, what the client pays, payment and refund state');
 
 -- 13. audit
 reset role;

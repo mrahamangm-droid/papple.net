@@ -13,7 +13,7 @@ export const metadata = { title: "Bookings" };
 export const dynamic = "force-dynamic";
 
 interface Row { id: string; side: "provider" | "client"; service_title: string; other_org_name: string; starts_at: string; ends_at: string; status: string; note: string; meeting_url: string | null; reason: string; cancelled_by_org: string | null;
-  price: number | null; currency: string | null; pay_by: string | null; payment_status: string | null; refund_status: string | null }
+  price: number | null; currency: string | null; client_total: number | null; pay_by: string | null; payment_status: string | null; refund_status: string | null }
 
 async function refundCutoffHours(): Promise<number> {
   try { return await settings.getSetting("bookings.client_refund_cutoff_hours", z.number().int().min(0).max(720)); } catch { return 24; }

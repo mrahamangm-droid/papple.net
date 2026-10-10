@@ -21,6 +21,8 @@ function mk(over: Partial<BookingPaymentsDeps> = {}, payData: unknown = quote())
       attach: vi.fn(async () => true),
       refundToSend: vi.fn(async () => ({ paymentId: PAY, paymentIntentId: "pi_1", amount: 10200, currency: "USD", idempotencyKey: `booking-refund-${PAY}` })),
       recordRefundFailed: vi.fn(async () => undefined),
+      openSession: vi.fn(async () => "cs_open"),
+      bookingOfPayment: vi.fn(async () => BK),
     },
     provider: {
       createCheckout: vi.fn(async () => ({ sessionId: "cs_new", url: "https://checkout.test/cs_new" })),
@@ -140,5 +142,38 @@ describe("retryRefund", () => {
   it("reports a failed resend", async () => {
     const { pay } = mk({ provider: { ...mk().deps.provider, refundPayment: vi.fn(async () => { throw new Error("x"); }) } });
     expect(await pay.retryRefund({ orgId: ORG, bookingId: BK })).toEqual({ ok: false, code: "refund_failed" });
+  });
+});
+
+describe("afterCancel", () => {
+  it("expires a checkout left open and sends a queued refund", async () => {
+    const { pay, deps } = mk();
+    expect(await pay.afterCancel(BK, true)).toEqual({ ok: true });
+    expect(deps.provider.expireCheckout).toHaveBeenCalledWith("cs_open");
+    expect(deps.provider.refundPayment).toHaveBeenCalled();
+  });
+  it("only expires when nothing was paid", async () => {
+    const { pay, deps } = mk();
+    expect(await pay.afterCancel(BK, false)).toEqual({ ok: true });
+    expect(deps.provider.expireCheckout).toHaveBeenCalledWith("cs_open");
+    expect(deps.provider.refundPayment).not.toHaveBeenCalled();
+  });
+  it("a failed expiry does not hide the refund outcome", async () => {
+    const { pay } = mk({ provider: { ...mk().deps.provider, expireCheckout: vi.fn(async () => { throw new Error("x"); }) } });
+    expect(await pay.afterCancel(BK, true)).toEqual({ ok: true });
+  });
+});
+
+describe("refundLatePayment", () => {
+  it("sends the refund for a booking payment that arrived after cancellation", async () => {
+    const { pay, deps } = mk();
+    expect(await pay.refundLatePayment(PAY)).toEqual({ ok: true });
+    expect(deps.service.bookingOfPayment).toHaveBeenCalledWith(PAY);
+    expect(deps.provider.refundPayment).toHaveBeenCalled();
+  });
+  it("ignores contract payments", async () => {
+    const { pay, deps } = mk({ service: { ...mk().deps.service, bookingOfPayment: vi.fn(async () => null) } });
+    expect(await pay.refundLatePayment(PAY)).toEqual({ ok: true });
+    expect(deps.provider.refundPayment).not.toHaveBeenCalled();
   });
 });

@@ -54,12 +54,14 @@ export function groupSlotsByDay(isoSlots: string[], timeZone: string): SlotDay[]
   return [...days.values()];
 }
 
-export interface PaymentRow { status: string; price: number | null; currency: string | null; pay_by: string | null; payment_status: string | null; refund_status: string | null }
+export interface PaymentRow { side?: string; client_total?: number | null; status: string; price: number | null; currency: string | null; pay_by: string | null; payment_status: string | null; refund_status: string | null }
 export type PaymentKind = "awaiting" | "due" | "overdue" | "paid" | "refund_pending" | "refunded";
 /** Where the money for a priced booking stands. "due" carries pay_by so the page can show it in local time. */
 export function bookingPaymentState(r: PaymentRow, now: Date = new Date()): { kind: PaymentKind; text: string; payBy?: string } | null {
   if (r.price == null || !r.currency) return null;
-  const amount = formatMinor(r.price, r.currency);
+  // what the client is charged and refunded (price plus the client fee); the professional also sees its own price
+  const total = formatMinor(r.client_total ?? r.price, r.currency);
+  const amount = r.side === "provider" ? `${total} by the client (your price ${formatMinor(r.price, r.currency)})` : total;
   if (r.refund_status === "succeeded" || r.payment_status === "refunded") return { kind: "refunded", text: `Refunded ${amount}` };
   if (r.refund_status === "pending" || r.payment_status === "refund_pending") return { kind: "refund_pending", text: `Refund of ${amount} pending` };
   if (r.payment_status === "succeeded") return { kind: "paid", text: `Paid ${amount}` };

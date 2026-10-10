@@ -18,7 +18,7 @@ A professional can charge for a booked session. The client pays through Stripe C
   - `record_payment_succeeded`, `record_payment_failed` and `record_refund_succeeded` first check whether the id is a booking payment and delegate if so.
   - The webhook code, its signature check and its once-per-event store stay as they are.
   - Cost if wrong: the three functions are recreated with their bodies otherwise unchanged.
-- **Ruling: release unpaid bookings lazily.** A confirmed but unpaid booking whose `pay_by` has passed counts as free for slots right away. It is set to `cancelled` (reason "Payment was not received in time") the next time anyone requests that provider, tries to pay, or lists bookings. There is no scheduled job; this repo has no cron scheduler configured.
+- **Ruling: release unpaid bookings lazily.** A confirmed but unpaid booking whose `pay_by` has passed counts as free for slots right away. It is set to `cancelled` (reason "Payment was not received in time") the next time anyone requests that provider or lists bookings. (Review: with a checkout session open, the time is held one more hour, and only a booking no longer confirmed refunds a late payment.) There is no scheduled job; this repo has no cron scheduler configured.
 - **Ruling: refunds are sent by the cancel action, with a "Retry refund" button.** There is no cron job. Every refund has a deterministic idempotency key, so a retry never refunds twice.
 - **Ruling: money that arrives after a booking was cancelled or released is refunded automatically.** The payment is recorded (it is real), a full refund is queued, and the outcome `paid_on_cancelled` is alerted, the same alert path as contracts.
 - **Success:**

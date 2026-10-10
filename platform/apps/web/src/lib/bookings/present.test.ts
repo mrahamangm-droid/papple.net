@@ -44,7 +44,7 @@ describe("bookingNotificationCopy", () => {
 
 describe("bookingPaymentState", () => {
   const NOW = new Date("2027-03-01T10:00:00Z");
-  const row = (o: Record<string, unknown>) => ({ status: "confirmed", price: 10000, currency: "USD", pay_by: "2027-03-02T10:00:00Z", payment_status: null, refund_status: null, ...o });
+  const row = (o: Record<string, unknown>) => ({ side: "client", client_total: 10200, status: "confirmed", price: 10000, currency: "USD", pay_by: "2027-03-02T10:00:00Z", payment_status: null, refund_status: null, ...o });
   it.each([
     [{ price: null }, null],
     [{ status: "pending", pay_by: null }, "awaiting"],
@@ -62,8 +62,12 @@ describe("bookingPaymentState", () => {
     expect(bookingPaymentState(row(o), NOW)?.kind ?? null).toBe(kind);
   });
   it("labels with the amount", () => {
-    expect(bookingPaymentState(row({ payment_status: "succeeded" }), NOW)?.text).toBe("Paid $100.00");
-    expect(bookingPaymentState(row({ status: "pending", pay_by: null }), NOW)?.text).toBe("$100.00, paid after confirmation");
+    expect(bookingPaymentState(row({ payment_status: "succeeded" }), NOW)?.text).toBe("Paid $102.00");
+    expect(bookingPaymentState(row({ status: "pending", pay_by: null }), NOW)?.text).toBe("$102.00, paid after confirmation");
+    expect(bookingPaymentState(row({ status: "cancelled", payment_status: "refunded", refund_status: "succeeded" }), NOW)?.text).toBe("Refunded $102.00");
+  });
+  it("shows the professional the price and what the client pays", () => {
+    expect(bookingPaymentState(row({ side: "provider", payment_status: "succeeded" }), NOW)?.text).toBe("Paid $102.00 by the client (your price $100.00)");
   });
 });
 
